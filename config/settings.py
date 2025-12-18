@@ -7,7 +7,7 @@ load_dotenv()
 class Settings:
     PROJECT_NAME: str = "conscience"
 
-    HOST: str = os.getenv("HOST", "0.0.0.0")
+    HOST: str = os.getenv("HOST", "::")
     PORT: int = int(os.getenv("PORT", "8000"))
     RELOAD: bool = os.getenv("RELOAD", "true").lower() == "true"
     LOG_LEVEL: str = os.getenv("LOG_LEVEL", "info")
