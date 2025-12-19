@@ -17,6 +17,9 @@ def create_app() -> FastAPI:
         CORSMiddleware,
         **settings.get_cors_config()
     )
+
+    from api import conscience
+    app.include_router(conscience.router, prefix="/api", tags=["conscience"])
     
     return app
     

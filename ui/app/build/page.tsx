@@ -22,6 +22,8 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Header } from "@/components/Header";
+import { processInput } from "../../actions/process-input";
+import { toast } from "sonner"
 
 const examplePrompts = [
   {
@@ -74,14 +76,29 @@ const previousAgents = [
 
 export default function BuildPage() {
   const [prompt, setPrompt] = React.useState("");
+  const [isLoading, setIsLoading] = React.useState(false);
 
   const handleExampleClick = (examplePrompt: string) => {
     setPrompt(examplePrompt);
   };
 
-  const handleGenerate = () => {
-    // TODO: Implement agent generation
-    console.log("Generating agent with prompt:", prompt);
+  const handleGenerate = async () => {
+    if (!prompt.trim()) return;
+    
+    setIsLoading(true);
+    try {
+      const result = await processInput(prompt);
+      
+      if (result.success) {
+        toast.success("API Response: " + result.data.output);
+      } else {
+        toast.error("Error: " + result.error);
+      }
+    } catch (error) {
+      console.error("Error calling API:", error);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -159,11 +176,11 @@ export default function BuildPage() {
               {/* Generate Button */}
               <button
                 onClick={handleGenerate}
-                disabled={!prompt.trim()}
+                disabled={!prompt.trim() || isLoading}
                 className="cursor-pointer flex h-9 items-center gap-2 rounded-full bg-blue-500 px-5 text-sm font-medium text-white transition-all hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:shadow-none"
               >
-                <Sparkles size={16} />
-                Generate
+                <Sparkles size={16} className={isLoading ? "animate-spin" : ""} />
+                {isLoading ? "Generating..." : "Generate"}
               </button>
             </div>
           </div>

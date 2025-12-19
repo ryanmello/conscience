@@ -40,6 +40,7 @@ export function Header({ showUserMenu = true }: HeaderProps) {
   const [user, setUser] = React.useState<UserData | null>(null);
   const [isSigningOut, setIsSigningOut] = React.useState(false);
   const [mounted, setMounted] = React.useState(false);
+  const [isLoadingUser, setIsLoadingUser] = React.useState(true);
   const { setTheme, resolvedTheme } = useTheme();
   const router = useRouter();
   const supabase = createClient();
@@ -55,9 +56,13 @@ export function Header({ showUserMenu = true }: HeaderProps) {
 
   React.useEffect(() => {
     if (showUserMenu) {
+      setIsLoadingUser(true);
       supabase.auth.getUser().then(({ data }) => {
         setUser(data.user);
+        setIsLoadingUser(false);
       });
+    } else {
+      setIsLoadingUser(false);
     }
   }, [supabase.auth, showUserMenu]);
 
@@ -159,8 +164,8 @@ export function Header({ showUserMenu = true }: HeaderProps) {
             </DropdownMenu>
           )}
 
-          {/* Sign In Button for non-authenticated users */}
-          {showUserMenu && !user && mounted && (
+          {/* Sign In Button for non-authenticated users - only show after loading completes */}
+          {showUserMenu && !user && !isLoadingUser && mounted && (
             <Link
               href="/sign-in"
               className="flex h-9 items-center gap-2 rounded-full bg-blue-500 px-5 text-sm font-medium text-white transition-all hover:shadow-md"
