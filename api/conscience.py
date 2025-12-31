@@ -1,6 +1,7 @@
 import time
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel
+from api.auth import get_current_user, User
 from utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -17,12 +18,15 @@ class AIResponse(BaseModel):
 
 @router.get("/health")
 async def health_check():
+    """Public health check endpoint - no auth required."""
     return {"status": "healthy", "uptime": time.time() - start_time}
 
+
 @router.post("/process_input", response_model=AIResponse)
-async def process_input(request: AIRequest):
+async def process_input(request: AIRequest, user: User = Depends(get_current_user)):
+    """Process user input - requires authentication."""
     try:
-        logger.info(f"Processing request: {request.input}")
+        logger.info(f"Processing request from user {user.id}: {request.input}")
 
         # result = await orchestrator.orchestrate(request.input)
 
