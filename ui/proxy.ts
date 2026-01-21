@@ -23,19 +23,24 @@ export async function proxy(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser();
 
-  const publicRoutes = ["/sign-in", "/sign-up", "/auth/callback", "/auth/auth-code-error"];
-  const isPublicRoute = publicRoutes.some((route) =>
-    request.nextUrl.pathname.startsWith(route)
-  );
+  // Public routes that don't require authentication
+  const publicRoutes = ["/", "/sign-in", "/sign-up", "/auth/callback", "/auth/auth-code-error"];
+  const isPublicRoute = 
+    request.nextUrl.pathname === "/" || 
+    publicRoutes.slice(1).some((route) => request.nextUrl.pathname.startsWith(route));
 
-  // Redirect unauthenticated users to sign-in
+  // Redirect unauthenticated users to sign-in for protected routes
   if (!user && !isPublicRoute) {
     return NextResponse.redirect(new URL("/sign-in", request.url));
   }
 
-  // Redirect authenticated users away from sign-in
-  if (user && request.nextUrl.pathname === "/sign-in") {
-    return NextResponse.redirect(new URL("/", request.url));
+  // Redirect authenticated users away from auth pages to the build page
+  const authRoutes = ["/sign-in", "/sign-up"];
+  const isAuthRoute = authRoutes.some((route) =>
+    request.nextUrl.pathname.startsWith(route)
+  );
+  if (user && isAuthRoute) {
+    return NextResponse.redirect(new URL("/build", request.url));
   }
 
   return response;

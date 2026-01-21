@@ -11,12 +11,16 @@ export async function GET(request: NextRequest) {
   }
 
   if (code) {
-    // Determine redirect URL
+    // Determine redirect URL - prefer explicit env var, fallback to request origin
+    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL;
     const forwardedHost = request.headers.get("x-forwarded-host");
     const isLocalEnv = process.env.NODE_ENV === "development";
 
     let redirectUrl: string;
-    if (isLocalEnv) {
+    if (siteUrl) {
+      // Use explicit site URL from environment (recommended for production)
+      redirectUrl = `${siteUrl}${next}`;
+    } else if (isLocalEnv) {
       redirectUrl = `${origin}${next}`;
     } else if (forwardedHost) {
       redirectUrl = `https://${forwardedHost}${next}`;
