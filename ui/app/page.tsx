@@ -7,7 +7,7 @@ import { useTheme } from "next-themes";
 import {
   Workflow,
   Sparkles,
-  Calculator,
+  Search,
   FileText,
   MessageSquare,
   ArrowRight,
@@ -15,15 +15,12 @@ import {
   Bot,
   LogOut,
   Settings,
-  User,
   Sun,
   Moon,
   Mic,
   ChevronDown,
 } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { Card, CardContent } from "@/components/ui/card";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -36,11 +33,12 @@ import {
 
 const examplePrompts = [
   {
-    title: "Math Calculator",
-    description: "Basic arithmetic operations",
+    title: "Research Assistant",
+    description: "Find and compile information",
     prompt:
-      "Create an agent that takes two numbers and an operation (add, subtract, multiply, divide) and returns the result",
-    icon: Calculator,
+      "Create an agent that takes a topic and searches multiple sources to compile a comprehensive research summary with citations",
+    icon: Search,
+    colorClass: "text-blue-500",
   },
   {
     title: "Text Summarizer",
@@ -48,6 +46,7 @@ const examplePrompts = [
     prompt:
       "Create an agent that takes a long piece of text and summarizes it into 3-5 bullet points highlighting the key information",
     icon: FileText,
+    colorClass: "text-red-500",
   },
   {
     title: "Sentiment Analyzer",
@@ -55,6 +54,7 @@ const examplePrompts = [
     prompt:
       "Create an agent that analyzes text input and returns the sentiment (positive, negative, neutral) along with a confidence score",
     icon: MessageSquare,
+    colorClass: "text-green-500",
   },
 ];
 
@@ -62,8 +62,8 @@ const examplePrompts = [
 const previousAgents = [
   {
     id: "1",
-    name: "Math Agent",
-    description: "Performs basic arithmetic operations",
+    name: "Research Assistant",
+    description: "Searches and compiles information from multiple sources",
     createdAt: "2 days ago",
   },
   {
@@ -151,38 +151,41 @@ export default function Page() {
       <header className="border-b border-border/40">
         <div className="flex h-16 items-center justify-between px-6">
           <div className="flex items-center gap-2">
-            <Workflow size={24} />
+            <Workflow size={24} className="text-blue-500" />
             <span className="text-lg font-semibold">Conscience</span>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
             {/* Theme Toggle */}
             {mounted && (
-              <Button variant="ghost" onClick={toggleTheme} aria-label={resolvedTheme === "dark" ? "Switch to light mode" : "Switch to dark mode"}>
-                {resolvedTheme === "dark" ? <Sun size={18} /> : <Moon size={18} />}
-              </Button>
+              <button
+                onClick={toggleTheme}
+                className="cursor-pointer flex h-10 w-10 items-center justify-center rounded-full transition-colors hover:bg-muted"
+                aria-label={resolvedTheme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+              >
+                {resolvedTheme === "dark" ? <Sun size={20} /> : <Moon size={20} />}
+              </button>
             )}
-
 
             {/* User Menu */}
             {user && (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <button className="cursor-pointer flex items-center gap-2 rounded-full ring ring-border transition-all hover:ring-ring">
+                  <button className="cursor-pointer flex items-center justify-center rounded-full transition-all hover:shadow-md">
                     {avatarUrl ? (
                       <img
                         src={avatarUrl}
                         alt={displayName}
-                        className="h-9 w-9 rounded-full object-cover"
+                        className="h-10 w-10 rounded-full object-cover"
                       />
                     ) : (
-                      <div className="flex h-9 w-9 items-center justify-center rounded-full bg-muted">
-                        <User size={18} className="text-muted-foreground" />
+                      <div className="flex h-10 w-10 items-center justify-center rounded-full bg-blue-500 text-white font-medium">
+                        {displayName.charAt(0).toUpperCase()}
                       </div>
                     )}
                   </button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-56">
-                  <DropdownMenuLabel className="font-normal">
+                <DropdownMenuContent align="end" className="w-56 rounded-2xl p-2">
+                  <DropdownMenuLabel className="font-normal px-3 py-2">
                     <div className="flex flex-col space-y-1">
                       <p className="text-sm font-medium leading-none">{displayName}</p>
                       {user.email && (
@@ -198,6 +201,7 @@ export default function Page() {
                       onClick={() => {
                         router.push("/settings")
                       }}
+                      className="rounded-lg"
                     >
                       <Settings />
                       Settings
@@ -209,6 +213,7 @@ export default function Page() {
                       variant="destructive"
                       onClick={handleSignOut}
                       disabled={isSigningOut}
+                      className="rounded-lg"
                     >
                       <LogOut />
                       {isSigningOut ? "Signing out..." : "Sign out"}
@@ -222,57 +227,58 @@ export default function Page() {
       </header>
 
       {/* Main Content */}
-      <main className="mx-auto max-w-4xl px-4 py-12">
+      <main className="mx-auto max-w-3xl px-4 py-16">
         {/* Hero Section */}
-        <div className="mb-12 text-center">
-          <h1 className="mb-3 text-3xl font-semibold tracking-tight">
-            What kind of agent do you want to build?
+        <div className="mb-10 text-center">
+          <h1 className="mb-4 text-4xl font-normal tracking-tight">
+            Build an <span className="text-blue-500">AI agent</span>
           </h1>
-          <p className="text-muted-foreground">
-            Describe your agent in natural language and we&apos;ll generate the
-            tools and workflow for you.
+          <p className="text-lg text-muted-foreground">
+            Describe what you want and we&apos;ll create it for you
           </p>
         </div>
 
-        {/* Prompt Input */}
-        <div className="mb-12">
-          <div className="overflow-hidden rounded-2xl border border-border bg-card ring-1 ring-foreground/10">
+        {/* Input Box */}
+        <div className="mb-10">
+          <div className="overflow-hidden rounded-3xl border border-border bg-card shadow-sm hover:shadow-md transition-shadow">
             {/* Textarea */}
-            <Textarea
-              value={prompt}
-              onChange={(e) => setPrompt(e.target.value)}
-              placeholder="Create an agent that..."
-              className="min-h-28 resize-none border-0 bg-transparent px-4 py-4 text-base ring-0 focus-visible:border-0 focus-visible:ring-0"
-              data-gramm="false"
-              data-gramm_editor="false"
-              data-enable-grammarly="false"
-              spellCheck={false}
-              autoComplete="off"
-            />
+            <div className="px-5 py-4">
+              <Textarea
+                value={prompt}
+                onChange={(e) => setPrompt(e.target.value)}
+                placeholder="Create an agent that..."
+                className="min-h-24 resize-none border-none bg-transparent p-0 text-base shadow-none ring-0 focus-visible:border-none focus-visible:ring-0 focus-visible:shadow-none rounded-none placeholder:text-muted-foreground/60"
+                data-gramm="false"
+                data-gramm_editor="false"
+                data-enable-grammarly="false"
+                spellCheck={false}
+                autoComplete="off"
+              />
+            </div>
             {/* Footer Bar */}
-            <div className="flex items-center justify-between border-t border-border/50 bg-muted/30 px-3 py-2">
+            <div className="flex items-center justify-between border-t border-border/40 bg-muted/20 px-4 py-3">
               <div className="flex items-center gap-1">
                 {/* Model Selector */}
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" size="sm" className="h-8 gap-1 text-muted-foreground">
+                    <button className="cursor-pointer flex h-9 items-center gap-2 rounded-full px-3 text-sm text-muted-foreground transition-colors hover:bg-muted">
                       <Bot size={16} />
-                      <span className="text-xs">GPT-4o</span>
+                      <span>GPT-4o</span>
                       <ChevronDown size={14} />
-                    </Button>
+                    </button>
                   </DropdownMenuTrigger>
-                  <DropdownMenuContent align="start">
+                  <DropdownMenuContent align="start" className="rounded-xl">
                     <DropdownMenuLabel>Select Model</DropdownMenuLabel>
                     <DropdownMenuSeparator />
-                    <DropdownMenuItem>
+                    <DropdownMenuItem className="rounded-lg">
                       <Bot size={16} />
                       GPT-4o
                     </DropdownMenuItem>
-                    <DropdownMenuItem>
+                    <DropdownMenuItem className="rounded-lg">
                       <Bot size={16} />
                       GPT-4o Mini
                     </DropdownMenuItem>
-                    <DropdownMenuItem>
+                    <DropdownMenuItem className="rounded-lg">
                       <Bot size={16} />
                       Claude 3.5 Sonnet
                     </DropdownMenuItem>
@@ -280,41 +286,38 @@ export default function Page() {
                 </DropdownMenu>
 
                 {/* Mic Button */}
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="h-8 w-8 p-0 text-muted-foreground"
+                <button
+                  className="cursor-pointer flex h-9 w-9 items-center justify-center rounded-full transition-colors hover:bg-muted"
                   aria-label="Voice input"
                 >
-                  <Mic size={16} />
-                </Button>
+                  <Mic size={18} className="text-red-500" />
+                </button>
               </div>
 
               {/* Generate Button */}
-              <Button
+              <button
                 onClick={handleGenerate}
                 disabled={!prompt.trim()}
-                size="sm"
-                className="h-8"
+                className="cursor-pointer flex h-9 items-center gap-2 rounded-full bg-blue-500 px-5 text-sm font-medium text-white transition-all hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:shadow-none"
               >
-                <Sparkles size={14} data-icon="inline-start" />
+                <Sparkles size={16} />
                 Generate
-              </Button>
+              </button>
             </div>
           </div>
         </div>
 
-        {/* Example Prompts */}
-        <div className="mb-12 text-center">
-          <p className="mb-4 text-sm text-muted-foreground">Not sure where to start? Try one of these:</p>
-          <div className="flex flex-wrap justify-center gap-2">
+        {/* Example Prompts - Chips */}
+        <div className="mb-16 text-center">
+          <p className="mb-4 text-sm text-muted-foreground">Try an example</p>
+          <div className="flex flex-wrap justify-center gap-3">
             {examplePrompts.map((example) => (
               <button
                 key={example.title}
                 onClick={() => handleExampleClick(example.prompt)}
-                className="cursor-pointer inline-flex items-center gap-2 rounded-full border border-border bg-card px-4 py-2 text-sm transition-colors hover:bg-muted"
+                className="cursor-pointer inline-flex items-center gap-2 rounded-full border border-border bg-card px-4 py-2.5 text-sm transition-all hover:shadow-md"
               >
-                <example.icon size={14} className="text-muted-foreground" />
+                <example.icon size={16} className={example.colorClass} />
                 {example.title}
               </button>
             ))}
@@ -323,57 +326,65 @@ export default function Page() {
 
         {/* Previous Agents */}
         <div>
-          <h2 className="mb-4 text-lg font-medium">Your agents</h2>
+          <h2 className="mb-5 text-xl font-normal">
+            Your <span className="text-green-500">agents</span>
+          </h2>
           {previousAgents.length > 0 ? (
-            <div className="space-y-2">
-              {previousAgents.map((agent) => (
-                <button
-                  key={agent.id}
-                  className="cursor-pointer group w-full text-left"
-                  onClick={() => {
-                    // TODO: Navigate to agent
-                    console.log("Open agent:", agent.id);
-                  }}
-                >
-                  <Card size="sm" className="hover:bg-muted">
-                    <CardContent className="flex items-center gap-4 py-0">
-                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-muted">
-                        <Bot size={18} className="text-muted-foreground" />
+            <div className="space-y-3">
+              {previousAgents.map((agent, index) => {
+                // Cycle through colors for visual interest
+                const colorVariants = [
+                  { bg: "bg-blue-500/10", text: "text-blue-500" },
+                  { bg: "bg-red-500/10", text: "text-red-500" },
+                  { bg: "bg-yellow-500/10", text: "text-yellow-500" },
+                  { bg: "bg-green-500/10", text: "text-green-500" },
+                ];
+                const colorVariant = colorVariants[index % colorVariants.length];
+                
+                return (
+                  <button
+                    key={agent.id}
+                    className="cursor-pointer group w-full text-left"
+                    onClick={() => {
+                      // TODO: Navigate to agent
+                      console.log("Open agent:", agent.id);
+                    }}
+                  >
+                    <div className="flex items-center gap-4 rounded-2xl border border-border bg-card p-4 transition-all hover:shadow-md">
+                      <div className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-xl ${colorVariant.bg}`}>
+                        <Bot size={22} className={colorVariant.text} />
                       </div>
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-2">
                           <span className="font-medium">{agent.name}</span>
                           <ArrowRight
                             size={14}
-                            className="opacity-0 transition-opacity group-hover:opacity-100"
+                            className={`opacity-0 transition-opacity group-hover:opacity-100 ${colorVariant.text}`}
                           />
                         </div>
                         <p className="truncate text-sm text-muted-foreground">
                           {agent.description}
                         </p>
                       </div>
-                      <div className="flex shrink-0 items-center gap-1 text-xs text-muted-foreground">
-                        <Clock size={12} />
+                      <div className="flex shrink-0 items-center gap-1.5 text-xs text-muted-foreground">
+                        <Clock size={14} />
                         {agent.createdAt}
                       </div>
-                    </CardContent>
-                  </Card>
-                </button>
-              ))}
+                    </div>
+                  </button>
+                );
+              })}
             </div>
           ) : (
-            <Card className="border-dashed">
-              <CardContent className="flex flex-col items-center justify-center py-12 text-center">
-                <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-muted">
-                  <Bot size={24} className="text-muted-foreground" />
-                </div>
-                <p className="mb-1 font-medium">No agents yet</p>
-                <p className="text-sm text-muted-foreground">
-                  Create your first agent by describing what you want it to do
-                  above.
-                </p>
-              </CardContent>
-            </Card>
+            <div className="flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-border py-16 text-center">
+              <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-yellow-500/15">
+                <Bot size={32} className="text-yellow-500" />
+              </div>
+              <p className="mb-1 text-lg font-medium">No agents yet</p>
+              <p className="text-sm text-muted-foreground">
+                Describe what you want to build above
+              </p>
+            </div>
           )}
         </div>
       </main>
