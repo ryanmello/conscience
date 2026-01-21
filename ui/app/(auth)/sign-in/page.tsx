@@ -9,6 +9,8 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { createClient } from "@/lib/supabase/client";
+import { Workflow } from "lucide-react";
+import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useState } from "react";
 
@@ -88,7 +90,11 @@ export default function SignIn() {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center p-4">
+    <div className="flex flex-col gap-8 min-h-screen items-center justify-center p-4">
+      <div className="flex items-center justify-center gap-2">
+        <Workflow size={36} />
+        <h1 className="text-4xl font-semibold tracking-tight">Conscience</h1>
+      </div>
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
           <CardTitle className="text-2xl font-semibold">Welcome back</CardTitle>
@@ -125,11 +131,14 @@ export default function SignIn() {
             )}
             Continue with GitHub
           </Button>
-          <p className="text-muted-foreground mt-4 text-center text-xs">
-            By continuing, you agree to our Terms of Service and Privacy Policy.
-          </p>
         </CardContent>
       </Card>
+      <p className="text-center text-sm text-muted-foreground">
+        Don&apos;t have an account?{" "}
+        <Link href="/sign-up" className="text-blue-400 hover:underline font-medium">
+          Sign up
+        </Link>
+      </p>
     </div>
   );
 }

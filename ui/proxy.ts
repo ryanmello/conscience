@@ -23,7 +23,7 @@ export async function proxy(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser();
 
-  const publicRoutes = ["/sign-in", "/auth/callback", "/auth/auth-code-error"];
+  const publicRoutes = ["/sign-in", "/sign-up", "/auth/callback", "/auth/auth-code-error"];
   const isPublicRoute = publicRoutes.some((route) =>
     request.nextUrl.pathname.startsWith(route)
   );
