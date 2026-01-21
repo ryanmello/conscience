@@ -12,9 +12,9 @@ import { createClient } from "@/lib/supabase/client";
 import { Workflow } from "lucide-react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { useState } from "react";
+import { Suspense, useState } from "react";
 
-export default function SignUp() {
+function SignUpContent() {
     const [isLoading, setIsLoading] = useState<"google" | "github" | null>(null);
     const searchParams = useSearchParams();
     const supabase = createClient();
@@ -86,5 +86,13 @@ export default function SignUp() {
                 </Link>
             </p>
         </div>
+    );
+}
+
+export default function SignUp() {
+    return (
+        <Suspense>
+            <SignUpContent />
+        </Suspense>
     );
 }

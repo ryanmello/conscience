@@ -5,11 +5,11 @@
 Conscience is a platform that enables users to create AI agents through natural language descriptions. Users describe what they want an agent to do, and the system generates the necessary tools, orchestration logic, and visual workflow—all viewable and executable on an interactive canvas.
 
 **Example User Prompt:**
-> "Create an agent that takes two numbers and an operation (add, subtract, multiply, divide) and returns the result"
+> "Create an agent that analyzes customer feedback — detect sentiment, extract key topics, and flag urgent issues"
 
 **System Response:**
-- Generates tool code for: `add`, `subtract`, `multiply`, `divide`
-- Creates agent orchestration that routes to the correct tool based on operation
+- Generates tool code for: `analyze_sentiment`, `extract_topics`, `detect_urgency`
+- Creates agent orchestration that processes feedback through each analysis step
 - Displays the workflow on a React Flow canvas showing input → agent → tool execution → output
 - User can run the workflow immediately
 
@@ -41,7 +41,7 @@ Build a working prototype that demonstrates the core concept with simple, self-c
 
 **In Scope:**
 - Natural language agent description parsing
-- Code generation for simple tools (math operations, string manipulation, data transformation)
+- Code generation for simple tools (text analysis, data transformation, content processing)
 - Visual workflow display on existing React Flow canvas
 - Basic workflow execution (input → process → output)
 - Agent and workflow persistence
@@ -181,17 +181,18 @@ class BaseTool(ABC):
 **What the LLM generates:**
 
 ```python
-# Generated: tools/math/add.py
-class AddTool(BaseTool):
-    name = "add"
-    description = "Adds two numbers together"
+# Generated: tools/sentiment/analyze_sentiment.py
+class AnalyzeSentimentTool(BaseTool):
+    name = "analyze_sentiment"
+    description = "Analyzes the sentiment of input text"
     input_schema = {
-        "a": {"type": "number", "description": "First number"},
-        "b": {"type": "number", "description": "Second number"}
+        "text": {"type": "string", "description": "Text to analyze"}
     }
     
     async def execute(self, inputs: dict) -> dict:
-        return {"result": inputs["a"] + inputs["b"]}
+        # LLM-generated logic for sentiment analysis
+        sentiment = await self.llm.classify(inputs["text"], ["positive", "negative", "neutral"])
+        return {"sentiment": sentiment, "confidence": 0.92}
 ```
 
 **What we provide (not regenerated):**
@@ -309,7 +310,7 @@ Stream: { "step": "parsing" } → { "step": "generating_tools" } → { "step": "
 ### Workflow Execution
 ```
 POST /api/workflows/{id}/execute
-Body: { "inputs": { "a": 5, "b": 3, "operation": "add" } }
+Body: { "inputs": { "text": "The product quality is amazing but shipping was slow" } }
 Response: { "execution_id": 456 }
 
 SSE /api/executions/{id}/stream
@@ -319,7 +320,7 @@ Stream: { "node": "input", "status": "completed" } → { "node": "agent", "statu
 ### Tools
 ```
 GET /api/agents/{id}/tools
-Response: { "tools": [{ "name": "add", "description": "...", "input_schema": {...} }] }
+Response: { "tools": [{ "name": "analyze_sentiment", "description": "...", "input_schema": {...} }] }
 ```
 
 ---
@@ -327,13 +328,13 @@ Response: { "tools": [{ "name": "add", "description": "...", "input_schema": {..
 ## User Flow
 
 ```
-1. User enters prompt: "Create a math agent"
+1. User enters prompt: "Create a sentiment analyzer for customer feedback"
    │
    ▼
 2. Backend parses prompt, identifies required tools
    │
    ▼
-3. Tool Generator creates tool code (add, subtract, multiply, divide)
+3. Tool Generator creates tool code (analyze_sentiment, extract_topics, detect_urgency)
    │
    ▼
 4. Workflow is generated (input → agent router → tools → output)
@@ -345,19 +346,19 @@ Response: { "tools": [{ "name": "add", "description": "...", "input_schema": {..
    │
    ▼
 6. User sees canvas with:
-   - Input node (enter numbers + operation)
-   - Agent node (routes to correct tool)
-   - Tool nodes (add, subtract, etc.)
-   - Output node (displays result)
+   - Input node (enter feedback text)
+   - Agent node (orchestrates analysis)
+   - Tool nodes (sentiment, topics, urgency)
+   - Output node (displays analysis report)
    │
    ▼
-7. User clicks "Run", enters inputs
+7. User clicks "Run", enters feedback text
    │
    ▼
 8. Execution flows through nodes (real-time status updates)
    │
    ▼
-9. Result displayed in output node
+9. Analysis report displayed in output node
 ```
 
 ---
@@ -396,60 +397,57 @@ Response: { "tools": [{ "name": "add", "description": "...", "input_schema": {..
 
 ---
 
-## Example: Math Agent Generation
+## Example: Sentiment Analyzer Agent
 
 **User Prompt:**
-> "Create an agent that takes two numbers and an operation (add, subtract, multiply, divide) and returns the result"
+> "Create an agent that analyzes customer feedback — detect sentiment, extract key topics, and flag urgent issues"
 
 **Step 1: Prompt Analysis** (LLM)
 ```json
 {
-  "agent_name": "math_agent",
-  "description": "Performs basic arithmetic operations",
+  "agent_name": "feedback_analyzer",
+  "description": "Analyzes customer feedback for sentiment, topics, and urgency",
   "required_tools": [
-    {"name": "add", "inputs": ["a: number", "b: number"], "output": "number"},
-    {"name": "subtract", "inputs": ["a: number", "b: number"], "output": "number"},
-    {"name": "multiply", "inputs": ["a: number", "b: number"], "output": "number"},
-    {"name": "divide", "inputs": ["a: number", "b: number"], "output": "number"}
+    {"name": "analyze_sentiment", "inputs": ["text: string"], "output": "sentiment_result"},
+    {"name": "extract_topics", "inputs": ["text: string"], "output": "topics_list"},
+    {"name": "detect_urgency", "inputs": ["text: string", "sentiment: string"], "output": "urgency_flag"}
   ],
-  "routing_logic": "Based on 'operation' input, call the corresponding tool"
+  "routing_logic": "Process text through all tools in sequence, aggregate results"
 }
 ```
 
 **Step 2: Generated Tools**
 ```python
-# tools/generated/math_agent/add.py
-class AddTool(BaseTool):
-    name = "add"
-    description = "Adds two numbers"
-    input_schema = {"a": "number", "b": "number"}
+# tools/generated/feedback_analyzer/analyze_sentiment.py
+class AnalyzeSentimentTool(BaseTool):
+    name = "analyze_sentiment"
+    description = "Detects sentiment in customer feedback"
+    input_schema = {"text": "string"}
     
     async def execute(self, inputs):
-        return {"result": inputs["a"] + inputs["b"]}
+        result = await self.llm.analyze(inputs["text"])
+        return {"sentiment": result.label, "confidence": result.score}
 ```
 
 **Step 3: Generated Workflow** (React Flow JSON)
 ```json
 {
   "nodes": [
-    {"id": "input", "type": "input", "data": {"schema": {"a": "number", "b": "number", "operation": "string"}}},
-    {"id": "router", "type": "agent", "data": {"label": "Math Router"}},
-    {"id": "add", "type": "tool", "data": {"tool": "add"}},
-    {"id": "subtract", "type": "tool", "data": {"tool": "subtract"}},
-    {"id": "multiply", "type": "tool", "data": {"tool": "multiply"}},
-    {"id": "divide", "type": "tool", "data": {"tool": "divide"}},
-    {"id": "output", "type": "output", "data": {"label": "Result"}}
+    {"id": "input", "type": "input", "data": {"schema": {"text": "string"}}},
+    {"id": "orchestrator", "type": "agent", "data": {"label": "Feedback Analyzer"}},
+    {"id": "sentiment", "type": "tool", "data": {"tool": "analyze_sentiment"}},
+    {"id": "topics", "type": "tool", "data": {"tool": "extract_topics"}},
+    {"id": "urgency", "type": "tool", "data": {"tool": "detect_urgency"}},
+    {"id": "output", "type": "output", "data": {"label": "Analysis Report"}}
   ],
   "edges": [
-    {"source": "input", "target": "router"},
-    {"source": "router", "target": "add"},
-    {"source": "router", "target": "subtract"},
-    {"source": "router", "target": "multiply"},
-    {"source": "router", "target": "divide"},
-    {"source": "add", "target": "output"},
-    {"source": "subtract", "target": "output"},
-    {"source": "multiply", "target": "output"},
-    {"source": "divide", "target": "output"}
+    {"source": "input", "target": "orchestrator"},
+    {"source": "orchestrator", "target": "sentiment"},
+    {"source": "orchestrator", "target": "topics"},
+    {"source": "sentiment", "target": "urgency"},
+    {"source": "sentiment", "target": "output"},
+    {"source": "topics", "target": "output"},
+    {"source": "urgency", "target": "output"}
   ]
 }
 ```

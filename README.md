@@ -16,9 +16,9 @@ Conscience is a full-stack platform that enables users to create AI agents throu
 
 ### Example
 
-> *"Create an agent that takes two numbers and an operation (add, subtract, multiply, divide) and returns the result"*
+> *"Create an agent that analyzes customer feedback — detect sentiment, extract key topics, and flag urgent issues"*
 
-Conscience will automatically generate four tool functions, create a routing agent, and display an interactive workflow that users can run immediately.
+Conscience will automatically generate tools for sentiment analysis, topic extraction, and urgency detection, then create a workflow that processes feedback through each step and outputs a structured report.
 
 ## Tech Stack
 
