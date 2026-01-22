@@ -20,23 +20,23 @@ import { Header } from "@/components/Header";
 const demoPrompts = [
   {
     prefix: "Create an agent that",
-    text: "takes a topic and searches multiple sources to compile a comprehensive research summary with citations...",
+    text: "searches academic papers, news articles, and industry reports to compile comprehensive research summaries with proper citations and key findings highlighted...",
   },
   {
     prefix: "Create an agent that",
-    text: "monitors social media mentions and analyzes sentiment in real-time, alerting you to trending topics...",
+    text: "monitors social media mentions across Twitter, Reddit, and LinkedIn, analyzes sentiment in real-time, and sends alerts when trends emerge...",
   },
   {
     prefix: "Create an agent that",
-    text: "reads your emails, categorizes them by priority, and drafts appropriate responses...",
+    text: "reads your emails throughout the day, categorizes them by urgency, drafts context-aware responses matching your style, and creates a daily digest...",
   },
   {
     prefix: "Create an agent that",
-    text: "converts natural language queries into SQL and executes them against your database...",
+    text: "converts natural language questions into optimized SQL queries, validates and executes them safely, and returns results with automatic visualizations...",
   },
   {
     prefix: "Create an agent that",
-    text: "summarizes meeting transcripts and extracts action items with assigned owners and deadlines...",
+    text: "processes meeting transcripts, generates concise summaries, extracts action items with assigned owners and deadlines, and creates follow-up calendar events...",
   },
 ];
 
@@ -336,7 +336,7 @@ export default function LandingPage() {
         <div className="mx-auto max-w-5xl px-4">
           <div className="flex flex-col items-center justify-between gap-4 sm:flex-row">
             <div className="flex items-center gap-2">
-              <Image src={Logo} alt="Logo" width={20} height={20} />
+              <Image src={Logo} alt="Logo" width={20} height={20} className="invert dark:invert-0" />
               <span className="font-medium">Conscience</span>
             </div>
             <p className="text-sm text-muted-foreground">

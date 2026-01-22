@@ -53,7 +53,7 @@ function SignUpContent() {
     return (
         <div className="flex flex-col gap-8 min-h-screen items-center justify-center p-4">
             <div className="flex items-center justify-center gap-2">
-                <Image src={Logo} alt="Logo" width={20} height={20} />
+                <Image src={Logo} alt="Logo" width={32} height={32} className="invert dark:invert-0" />
                 <h1 className="text-4xl font-semibold tracking-tight">Conscience</h1>
             </div>
             <Card className="w-full max-w-md">

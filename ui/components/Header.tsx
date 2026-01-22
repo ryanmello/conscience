@@ -94,7 +94,7 @@ export function Header({ showUserMenu = true }: HeaderProps) {
     <header className="border-b border-border/40">
       <div className="flex h-16 items-center justify-between px-6">
         <Link href="/" className="flex items-center gap-2 transition-opacity hover:opacity-80">
-          <Image src={Logo} alt="Logo" height={20} width={20} />
+          <Image src={Logo} alt="Logo" height={20} width={20} className="invert dark:invert-0" />
           <span className="text-xl font-medium">Conscience</span>
         </Link>
         <div className="flex items-center gap-2">
