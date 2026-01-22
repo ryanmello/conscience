@@ -2,6 +2,8 @@
 
 import * as React from "react";
 import Link from "next/link";
+import Image from "next/image";
+import Logo from "@/public/ungroup.png";
 import {
   Sparkles,
   Bot,
@@ -12,7 +14,6 @@ import {
   FileText,
   MessageSquare,
   Workflow,
-  Play,
 } from "lucide-react";
 import { Header } from "@/components/Header";
 
@@ -185,10 +186,10 @@ export default function LandingPage() {
                 {currentPrompt.text}
               </p>
             </div>
-            <div className="flex items-center justify-between gap-4">
-              <div className="flex h-10 items-center gap-2 rounded-full bg-muted/50 px-4 text-sm text-muted-foreground">
-                <Bot size={16} />
-                GPT-4o
+            <div className="flex items-center justify-between gap-2 sm:gap-4">
+              <div className="flex h-8 sm:h-10 items-center gap-1.5 sm:gap-2 rounded-full bg-muted/50 px-2.5 sm:px-4 text-xs sm:text-sm text-muted-foreground">
+                <Bot size={14} className="sm:w-4 sm:h-4" />
+                <span>Opus 4.5</span>
               </div>
               {/* Progress indicators */}
               <div className="flex items-center gap-1.5">
@@ -211,8 +212,8 @@ export default function LandingPage() {
                   />
                 ))}
               </div>
-              <div className="flex h-10 items-center gap-2 rounded-full bg-blue-500 px-6 text-sm font-medium text-white">
-                <Sparkles size={16} />
+              <div className="flex h-8 sm:h-10 items-center gap-1.5 sm:gap-2 rounded-full bg-blue-500 px-4 sm:px-6 text-xs sm:text-sm font-medium text-white">
+                <Sparkles size={14} className="sm:w-4 sm:h-4" />
                 Generate
               </div>
             </div>
@@ -335,7 +336,7 @@ export default function LandingPage() {
         <div className="mx-auto max-w-5xl px-4">
           <div className="flex flex-col items-center justify-between gap-4 sm:flex-row">
             <div className="flex items-center gap-2">
-              <Workflow size={20} className="text-blue-500" />
+              <Image src={Logo} alt="Logo" width={20} height={20} />
               <span className="font-medium">Conscience</span>
             </div>
             <p className="text-sm text-muted-foreground">

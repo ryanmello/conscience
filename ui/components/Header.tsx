@@ -6,11 +6,11 @@ import { useRouter } from "next/navigation";
 import { useTheme } from "next-themes";
 import Link from "next/link";
 import {
-  Workflow,
   LogOut,
   Settings,
   Sun,
   Moon,
+  Ungroup,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -21,6 +21,8 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import Image from "next/image";
+import Logo from "@/public/ungroup.png"
 
 interface UserData {
   email?: string;
@@ -92,8 +94,8 @@ export function Header({ showUserMenu = true }: HeaderProps) {
     <header className="border-b border-border/40">
       <div className="flex h-16 items-center justify-between px-6">
         <Link href="/" className="flex items-center gap-2 transition-opacity hover:opacity-80">
-          <Workflow size={24} className="text-blue-500" />
-          <span className="text-lg font-semibold">Conscience</span>
+          <Image src={Logo} alt="Logo" height={20} width={20} />
+          <span className="text-xl font-medium">Conscience</span>
         </Link>
         <div className="flex items-center gap-2">
           {/* Theme Toggle */}

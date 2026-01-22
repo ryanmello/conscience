@@ -9,8 +9,9 @@ import {
 } from "@/components/ui/card";
 import { SocialAuthButton } from "@/components/social-auth-button";
 import { createClient } from "@/lib/supabase/client";
-import { Workflow } from "lucide-react";
 import Link from "next/link";
+import Image from "next/image";
+import Logo from "@/public/ungroup.png";
 import { useSearchParams } from "next/navigation";
 import { Suspense, useState } from "react";
 
@@ -52,7 +53,7 @@ function SignUpContent() {
     return (
         <div className="flex flex-col gap-8 min-h-screen items-center justify-center p-4">
             <div className="flex items-center justify-center gap-2">
-                <Workflow size={36} />
+                <Image src={Logo} alt="Logo" width={20} height={20} />
                 <h1 className="text-4xl font-semibold tracking-tight">Conscience</h1>
             </div>
             <Card className="w-full max-w-md">
