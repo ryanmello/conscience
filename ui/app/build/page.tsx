@@ -24,6 +24,7 @@ import {
 import { Header } from "@/components/Header";
 import { processInput } from "../../actions/process-input";
 import { toast } from "sonner"
+import { cn } from "@/lib/utils";
 
 const examplePrompts = [
   {
@@ -78,6 +79,47 @@ export default function BuildPage() {
   const [prompt, setPrompt] = React.useState("");
   const [isLoading, setIsLoading] = React.useState(false);
 
+  // Track if user is actively typing (has content in textarea)
+  const isTyping = prompt.length > 0;
+  
+  // Track animation phase: 'idle' -> 'fading-bottom' -> 'sliding' -> 'fading-top' -> 'complete'
+  // 1. Fade out "Try an example" and "Your agents" sections
+  // 2. Slide textarea down to the bottom
+  // 3. Fade out the "Build an AI agent" heading
+  // 4. Collapse the heading height after fade completes
+  const [animationPhase, setAnimationPhase] = React.useState<'idle' | 'fading-bottom' | 'sliding' | 'fading-top' | 'complete'>('idle');
+
+  React.useEffect(() => {
+    if (isTyping) {
+      // Phase 1: Fade out bottom sections (Try an example + Your agents)
+      setAnimationPhase('fading-bottom');
+      
+      // Phase 2: After bottom fades, slide textarea down
+      const slideTimer = setTimeout(() => {
+        setAnimationPhase('sliding');
+      }, 400);
+      
+      // Phase 3: After sliding, fade out the heading
+      const fadeTopTimer = setTimeout(() => {
+        setAnimationPhase('fading-top');
+      }, 900); // 400ms for fade + 500ms for slide
+      
+      // Phase 4: After heading fades, collapse its height
+      const completeTimer = setTimeout(() => {
+        setAnimationPhase('complete');
+      }, 1400); // 900ms + 500ms for fade
+      
+      return () => {
+        clearTimeout(slideTimer);
+        clearTimeout(fadeTopTimer);
+        clearTimeout(completeTimer);
+      };
+    } else {
+      // When clearing input, reverse immediately
+      setAnimationPhase('idle');
+    }
+  }, [isTyping]);
+
   const handleExampleClick = (examplePrompt: string) => {
     setPrompt(examplePrompt);
   };
@@ -101,14 +143,35 @@ export default function BuildPage() {
     }
   };
 
+  const isAnimating = animationPhase !== 'idle';
+  const isSliding = animationPhase === 'sliding' || animationPhase === 'fading-top' || animationPhase === 'complete';
+
   return (
-    <div className="min-h-screen bg-background">
+    <div className={cn(
+      "bg-background flex flex-col transition-all duration-1000 ease-out",
+      isSliding ? "h-screen overflow-hidden" : "min-h-screen"
+    )}>
       <Header />
 
       {/* Main Content */}
-      <main className="mx-auto max-w-3xl px-4 py-16">
-        {/* Hero Section */}
-        <div className="mb-10 text-center">
+      <main className={cn(
+        "mx-auto w-full max-w-3xl px-4 flex-1 flex flex-col relative transition-all duration-700 ease-out",
+        isSliding ? "pb-4" : "py-16"
+      )}>
+        {/* Hero Section - Fades out LAST */}
+        <div 
+          className={cn(
+            "text-center overflow-hidden",
+            // Fade happens in fading-top phase
+            animationPhase === 'fading-top' || animationPhase === 'complete' 
+              ? "opacity-0 pointer-events-none" 
+              : "opacity-100",
+            // Height collapse happens AFTER fade completes (in 'complete' phase)
+            animationPhase === 'complete' ? "h-0 mb-0" : "mb-10",
+            // Transition timing
+            "transition-all duration-1000 ease-out"
+          )}
+        >
           <h1 className="mb-4 text-4xl font-normal tracking-tight">
             Build an <span className="text-blue-500">AI agent</span>
           </h1>
@@ -117,8 +180,16 @@ export default function BuildPage() {
           </p>
         </div>
 
-        {/* Input Box */}
-        <div className="mb-10">
+        {/* Input Box Container - Expands to push content down when typing */}
+        <div 
+          className={cn(
+            "transition-all duration-1000 ease-out",
+            // Expand after bottom sections have faded (sliding phase onwards)
+            isSliding
+              ? "flex-1 flex flex-col justify-end" 
+              : "mb-10"
+          )}
+        >
           <div className="overflow-hidden rounded-3xl border border-border bg-card shadow-sm hover:shadow-md transition-shadow">
             {/* Textarea */}
             <div className="px-5 py-4">
@@ -186,8 +257,18 @@ export default function BuildPage() {
           </div>
         </div>
 
-        {/* Example Prompts - Chips */}
-        <div className="mb-16 text-center">
+        {/* Example Prompts - Chips - Fades out FIRST */}
+        <div 
+          className={cn(
+            "text-center overflow-hidden",
+            // Fade happens immediately when typing starts (fading-bottom and onwards)
+            isAnimating ? "opacity-0 pointer-events-none" : "opacity-100",
+            // Height collapse happens when sliding starts
+            isSliding ? "h-0" : "mb-16",
+            // Transition timing
+            "transition-all duration-1000 ease-out"
+          )}
+        >
           <p className="mb-4 text-sm text-muted-foreground">Try an example</p>
           <div className="flex flex-wrap justify-center gap-3">
             {examplePrompts.map((example) => (
@@ -203,8 +284,18 @@ export default function BuildPage() {
           </div>
         </div>
 
-        {/* Previous Agents */}
-        <div>
+        {/* Previous Agents - Fades out FIRST */}
+        <div 
+          className={cn(
+            "overflow-hidden",
+            // Fade happens immediately when typing starts (fading-bottom and onwards)
+            isAnimating ? "opacity-0 pointer-events-none" : "opacity-100",
+            // Height collapse happens when sliding starts
+            isSliding ? "h-0" : "",
+            // Transition timing
+            "transition-all duration-1000 ease-out"
+          )}
+        >
           <h2 className="mb-5 text-xl font-normal">
             Your <span className="text-green-500">agents</span>
           </h2>
