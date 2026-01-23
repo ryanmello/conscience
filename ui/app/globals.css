@@ -124,3 +124,61 @@
     @apply bg-background text-foreground;
   }
 }
+
+/* Custom scrollbar styles */
+.scrollbar-thin {
+  scrollbar-width: thin;
+  scrollbar-color: var(--scrollbar-thumb) transparent;
+}
+
+.scrollbar-thin::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.scrollbar-thin::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.scrollbar-thin::-webkit-scrollbar-thumb {
+  background-color: var(--scrollbar-thumb);
+  border-radius: 9999px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+
+.scrollbar-thin::-webkit-scrollbar-thumb:hover {
+  background-color: var(--scrollbar-thumb-hover);
+}
+
+/* Textarea scrollbar - minimal bean */
+.scrollbar-textarea {
+  scrollbar-width: thin;
+  scrollbar-color: oklch(0.5 0 0 / 25%) transparent;
+}
+
+.scrollbar-textarea::-webkit-scrollbar {
+  width: 4px;
+  background: transparent;
+}
+
+.scrollbar-textarea::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.scrollbar-textarea::-webkit-scrollbar-thumb {
+  background-color: oklch(0.5 0 0 / 25%);
+  border-radius: 9999px;
+}
+
+.scrollbar-textarea::-webkit-scrollbar-button {
+  display: none;
+}
+
+.dark .scrollbar-textarea {
+  scrollbar-color: oklch(1 0 0 / 20%) transparent;
+}
+
+.dark .scrollbar-textarea::-webkit-scrollbar-thumb {
+  background-color: oklch(1 0 0 / 20%);
+}

@@ -101,7 +101,7 @@ export default function BuildPage() {
       // Phase 3: After sliding, fade out the heading
       const fadeTopTimer = setTimeout(() => {
         setAnimationPhase('fading-top');
-      }, 900); // 400ms for fade + 500ms for slide
+      }, 400); // 400ms for fade + 500ms for slide
 
       // Phase 4: After heading fades, collapse its height
       const completeTimer = setTimeout(() => {
@@ -187,7 +187,7 @@ export default function BuildPage() {
             // Height collapse happens AFTER fade completes (in 'complete' phase)
             animationPhase === 'complete' ? "h-0 mb-0" : "mb-10",
             // Transition timing
-            "transition-all duration-1000 ease-out"
+            "transition-all duration-400 ease-out"
           )}
         >
           <h1 className="mb-4 text-4xl font-normal tracking-tight">
@@ -215,7 +215,7 @@ export default function BuildPage() {
                 value={prompt}
                 onChange={(e) => setPrompt(e.target.value)}
                 placeholder="Create an agent that..."
-                className="min-h-24 resize-none border-none bg-transparent p-0 text-base shadow-none ring-0 focus-visible:border-none focus-visible:ring-0 focus-visible:shadow-none rounded-none placeholder:text-muted-foreground/60"
+                className="min-h-24 max-h-64 resize-none border-none bg-transparent p-0 text-base shadow-none ring-0 focus-visible:border-none focus-visible:ring-0 focus-visible:shadow-none rounded-none placeholder:text-muted-foreground/60 overflow-y-auto scrollbar-textarea"
                 data-gramm="false"
                 data-gramm_editor="false"
                 data-enable-grammarly="false"
