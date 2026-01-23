@@ -9,8 +9,8 @@ import {
   ArrowRight,
   Clock,
   Bot,
-  Mic,
   ChevronDown,
+  Loader2,
 } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -22,7 +22,9 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Header } from "@/components/Header";
+import { MicButton } from "@/components/MicButton";
 import { processInput } from "../../actions/process-input";
+import { getModels } from "../../actions/get_models";
 import { toast } from "sonner"
 import { cn } from "@/lib/utils";
 
@@ -63,12 +65,6 @@ const previousAgents = [
   },
   {
     id: "2",
-    name: "Email Classifier",
-    description: "Categorizes emails by priority and type",
-    createdAt: "5 days ago",
-  },
-  {
-    id: "3",
     name: "Data Formatter",
     description: "Converts data between JSON, CSV, and XML formats",
     createdAt: "1 week ago",
@@ -78,10 +74,13 @@ const previousAgents = [
 export default function BuildPage() {
   const [prompt, setPrompt] = React.useState("");
   const [isLoading, setIsLoading] = React.useState(false);
+  const [models, setModels] = React.useState<string[] | null>(null);
+  const [selectedModel, setSelectedModel] = React.useState<string>("Opus 4.5");
+  const [isLoadingModels, setIsLoadingModels] = React.useState(false);
 
   // Track if user is actively typing (has content in textarea)
   const isTyping = prompt.length > 0;
-  
+
   // Track animation phase: 'idle' -> 'fading-bottom' -> 'sliding' -> 'fading-top' -> 'complete'
   // 1. Fade out "Try an example" and "Your agents" sections
   // 2. Slide textarea down to the bottom
@@ -93,22 +92,22 @@ export default function BuildPage() {
     if (isTyping) {
       // Phase 1: Fade out bottom sections (Try an example + Your agents)
       setAnimationPhase('fading-bottom');
-      
+
       // Phase 2: After bottom fades, slide textarea down
       const slideTimer = setTimeout(() => {
         setAnimationPhase('sliding');
       }, 400);
-      
+
       // Phase 3: After sliding, fade out the heading
       const fadeTopTimer = setTimeout(() => {
         setAnimationPhase('fading-top');
       }, 900); // 400ms for fade + 500ms for slide
-      
+
       // Phase 4: After heading fades, collapse its height
       const completeTimer = setTimeout(() => {
         setAnimationPhase('complete');
       }, 1400); // 900ms + 500ms for fade
-      
+
       return () => {
         clearTimeout(slideTimer);
         clearTimeout(fadeTopTimer);
@@ -124,13 +123,32 @@ export default function BuildPage() {
     setPrompt(examplePrompt);
   };
 
+  const handleDropdownOpenChange = async (open: boolean) => {
+    if (open && models === null) {
+      setIsLoadingModels(true);
+      try {
+        const result = await getModels();
+        if (result.success && result.data) {
+          setModels(result.data);
+        } else {
+          toast.error(result.error || "Failed to load models");
+        }
+      } catch (error) {
+        console.error("Error fetching models:", error);
+        toast.error("Failed to load models");
+      } finally {
+        setIsLoadingModels(false);
+      }
+    }
+  };
+
   const handleGenerate = async () => {
     if (!prompt.trim()) return;
-    
+
     setIsLoading(true);
     try {
       const result = await processInput(prompt);
-      
+
       if (result.success) {
         toast.success("API Response: " + result.data.output);
       } else {
@@ -159,12 +177,12 @@ export default function BuildPage() {
         isSliding ? "pb-4" : "py-16"
       )}>
         {/* Hero Section - Fades out LAST */}
-        <div 
+        <div
           className={cn(
             "text-center overflow-hidden",
             // Fade happens in fading-top phase
-            animationPhase === 'fading-top' || animationPhase === 'complete' 
-              ? "opacity-0 pointer-events-none" 
+            animationPhase === 'fading-top' || animationPhase === 'complete'
+              ? "opacity-0 pointer-events-none"
               : "opacity-100",
             // Height collapse happens AFTER fade completes (in 'complete' phase)
             animationPhase === 'complete' ? "h-0 mb-0" : "mb-10",
@@ -181,12 +199,12 @@ export default function BuildPage() {
         </div>
 
         {/* Input Box Container - Expands to push content down when typing */}
-        <div 
+        <div
           className={cn(
             "transition-all duration-1000 ease-out",
             // Expand after bottom sections have faded (sliding phase onwards)
             isSliding
-              ? "flex-1 flex flex-col justify-end" 
+              ? "flex-1 flex flex-col justify-end"
               : "mb-10"
           )}
         >
@@ -209,39 +227,42 @@ export default function BuildPage() {
             <div className="flex items-center justify-between border-t border-border/40 bg-muted/20 px-4 py-3">
               <div className="flex items-center gap-1">
                 {/* Model Selector */}
-                <DropdownMenu>
+                <DropdownMenu onOpenChange={handleDropdownOpenChange}>
                   <DropdownMenuTrigger asChild>
-                    <button className="cursor-pointer flex h-9 items-center gap-2 rounded-full px-3 text-sm text-muted-foreground transition-colors hover:bg-muted">
+                    <button className="cursor-pointer flex h-9 items-center gap-2 rounded-full px-3 text-sm text-muted-foreground transition-colors hover:bg-muted focus:outline-none focus-visible:ring-0">
                       <Bot size={16} />
-                      <span>GPT-4o</span>
+                      <span>{selectedModel}</span>
                       <ChevronDown size={14} />
                     </button>
                   </DropdownMenuTrigger>
-                  <DropdownMenuContent align="start" className="rounded-xl">
+                  <DropdownMenuContent align="start" className="rounded-xl min-w-[180px]">
                     <DropdownMenuLabel>Select Model</DropdownMenuLabel>
                     <DropdownMenuSeparator />
-                    <DropdownMenuItem className="rounded-lg">
-                      <Bot size={16} />
-                      GPT-4o
-                    </DropdownMenuItem>
-                    <DropdownMenuItem className="rounded-lg">
-                      <Bot size={16} />
-                      GPT-4o Mini
-                    </DropdownMenuItem>
-                    <DropdownMenuItem className="rounded-lg">
-                      <Bot size={16} />
-                      Claude 3.5 Sonnet
-                    </DropdownMenuItem>
+                    {isLoadingModels ? (
+                      <div className="flex items-center justify-center py-4">
+                        <Loader2 size={20} className="animate-spin text-muted-foreground" />
+                      </div>
+                    ) : models && models.length > 0 ? (
+                      models.map((model) => (
+                        <DropdownMenuItem
+                          key={model}
+                          className="rounded-lg cursor-pointer"
+                          onClick={() => setSelectedModel(model)}
+                        >
+                          <Bot size={16} />
+                          {model}
+                        </DropdownMenuItem>
+                      ))
+                    ) : (
+                      <div className="px-2 py-4 text-center text-sm text-muted-foreground">
+                        No models available
+                      </div>
+                    )}
                   </DropdownMenuContent>
                 </DropdownMenu>
 
                 {/* Mic Button */}
-                <button
-                  className="cursor-pointer flex h-9 w-9 items-center justify-center rounded-full transition-colors hover:bg-muted"
-                  aria-label="Voice input"
-                >
-                  <Mic size={18} className="text-red-500" />
-                </button>
+                <MicButton setPrompt={setPrompt} />
               </div>
 
               {/* Generate Button */}
@@ -258,7 +279,7 @@ export default function BuildPage() {
         </div>
 
         {/* Example Prompts - Chips - Fades out FIRST */}
-        <div 
+        <div
           className={cn(
             "text-center overflow-hidden",
             // Fade happens immediately when typing starts (fading-bottom and onwards)
@@ -285,7 +306,7 @@ export default function BuildPage() {
         </div>
 
         {/* Previous Agents - Fades out FIRST */}
-        <div 
+        <div
           className={cn(
             "overflow-hidden",
             // Fade happens immediately when typing starts (fading-bottom and onwards)
@@ -310,7 +331,7 @@ export default function BuildPage() {
                   { bg: "bg-green-500/10", text: "text-green-500" },
                 ];
                 const colorVariant = colorVariants[index % colorVariants.length];
-                
+
                 return (
                   <button
                     key={agent.id}

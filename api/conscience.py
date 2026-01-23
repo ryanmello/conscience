@@ -1,4 +1,5 @@
 import time
+from typing import List
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 from api.auth import get_current_user, User
@@ -31,6 +32,14 @@ async def process_input(request: AIRequest, user: User = Depends(get_current_use
         # result = await orchestrator.orchestrate(request.input)
 
         return AIResponse(output=request.input)
+    except Exception as e:
+        logger.error(e)
+        raise
+
+@router.get("/models", response_model=List[str])
+async def get_models():
+    try:
+        return ["Opus 4.5", "GPT-5.2 Codex", "Gemini 3 Flash", "Grok Code"]
     except Exception as e:
         logger.error(e)
         raise
