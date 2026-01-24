@@ -19,6 +19,8 @@ class Settings:
     OPENAI_API_KEY: str = os.getenv("OPENAI_API_KEY", "")
     OPENAI_BASE_URL: str = "https://api.openai.com/v1"
 
+    ANTHROPIC_API_KEY: str = os.getenv("ANTHROPIC_API_KEY", "")
+
     SUPABASE_DATABASE_URL: str = os.getenv("SUPABASE_DATABASE_URL", "")
     SUPABASE_PROJECT_URL: str = os.getenv("SUPABASE_PROJECT_URL", "")
     SUPABASE_SECRET_API_KEY: str = os.getenv("SUPABASE_SECRET_API_KEY", "")

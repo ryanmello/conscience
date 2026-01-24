@@ -10,7 +10,10 @@ import {
   Clock,
   Bot,
   ChevronDown,
+  ChevronUp,
   Loader2,
+  Download,
+  User,
 } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -23,9 +26,9 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Header } from "@/components/Header";
 import { MicButton } from "@/components/MicButton";
-import { processInput } from "../../actions/process-input";
+import { generatePlan, GeneratePlanResult } from "../../actions/generate-plan";
 import { getModels } from "../../actions/get_models";
-import { toast } from "sonner"
+import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
 const examplePrompts = [
@@ -71,25 +74,39 @@ const previousAgents = [
   },
 ];
 
+// Message types for the chat
+type Message = 
+  | { type: "user"; content: string }
+  | { type: "loading" }
+  | { type: "response"; plan: GeneratePlanResult; isExpanded: boolean };
+
 export default function BuildPage() {
   const [prompt, setPrompt] = React.useState("");
   const [isLoading, setIsLoading] = React.useState(false);
   const [models, setModels] = React.useState<string[] | null>(null);
   const [selectedModel, setSelectedModel] = React.useState<string>("Opus 4.5");
   const [isLoadingModels, setIsLoadingModels] = React.useState(false);
+  const [messages, setMessages] = React.useState<Message[]>([]);
+  const chatEndRef = React.useRef<HTMLDivElement>(null);
+
+  // Track if we're in chat mode (has messages)
+  const isChatMode = messages.length > 0;
 
   // Track if user is actively typing (has content in textarea)
   const isTyping = prompt.length > 0;
 
   // Track animation phase: 'idle' -> 'fading-bottom' -> 'sliding' -> 'fading-top' -> 'complete'
-  // 1. Fade out "Try an example" and "Your agents" sections
-  // 2. Slide textarea down to the bottom
-  // 3. Fade out the "Build an AI agent" heading
-  // 4. Collapse the heading height after fade completes
   const [animationPhase, setAnimationPhase] = React.useState<'idle' | 'fading-bottom' | 'sliding' | 'fading-top' | 'complete'>('idle');
 
+  // Scroll to bottom when messages change
   React.useEffect(() => {
-    if (isTyping) {
+    if (chatEndRef.current) {
+      chatEndRef.current.scrollIntoView({ behavior: "smooth" });
+    }
+  }, [messages]);
+
+  React.useEffect(() => {
+    if (isTyping || isChatMode) {
       // Phase 1: Fade out bottom sections (Try an example + Your agents)
       setAnimationPhase('fading-bottom');
 
@@ -101,12 +118,12 @@ export default function BuildPage() {
       // Phase 3: After sliding, fade out the heading
       const fadeTopTimer = setTimeout(() => {
         setAnimationPhase('fading-top');
-      }, 400); // 400ms for fade + 500ms for slide
+      }, 400);
 
       // Phase 4: After heading fades, collapse its height
       const completeTimer = setTimeout(() => {
         setAnimationPhase('complete');
-      }, 1400); // 900ms + 500ms for fade
+      }, 1400);
 
       return () => {
         clearTimeout(slideTimer);
@@ -114,10 +131,9 @@ export default function BuildPage() {
         clearTimeout(completeTimer);
       };
     } else {
-      // When clearing input, reverse immediately
       setAnimationPhase('idle');
     }
-  }, [isTyping]);
+  }, [isTyping, isChatMode]);
 
   const handleExampleClick = (examplePrompt: string) => {
     setPrompt(examplePrompt);
@@ -145,19 +161,54 @@ export default function BuildPage() {
   const handleGenerate = async () => {
     if (!prompt.trim()) return;
 
+    const userMessage = prompt.trim();
+    setPrompt("");
+    
+    // Add user message and loading state
+    setMessages(prev => [
+      ...prev,
+      { type: "user", content: userMessage },
+      { type: "loading" }
+    ]);
+
     setIsLoading(true);
     try {
-      const result = await processInput(prompt);
+      const result = await generatePlan(userMessage);
 
-      if (result.success) {
-        toast.success("API Response: " + result.data.output);
+      if (result.success && result.data) {
+        const plan = result.data;
+        // Replace loading with response
+        setMessages(prev => [
+          ...prev.filter(m => m.type !== "loading"),
+          { type: "response", plan, isExpanded: false }
+        ]);
       } else {
+        // Remove loading on error
+        setMessages(prev => prev.filter(m => m.type !== "loading"));
         toast.error("Error: " + result.error);
       }
     } catch (error) {
-      console.error("Error calling API:", error);
+      console.error("Error generating plan:", error);
+      setMessages(prev => prev.filter(m => m.type !== "loading"));
+      toast.error("Failed to generate plan");
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const toggleExpand = (index: number) => {
+    setMessages(prev => prev.map((msg, i) => {
+      if (i === index && msg.type === "response") {
+        return { ...msg, isExpanded: !msg.isExpanded };
+      }
+      return msg;
+    }));
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      handleGenerate();
     }
   };
 
@@ -166,27 +217,23 @@ export default function BuildPage() {
 
   return (
     <div className={cn(
-      "bg-background flex flex-col transition-all duration-1000 ease-out",
-      isSliding ? "h-screen overflow-hidden" : "min-h-screen"
+      "bg-background flex flex-col transition-all duration-1000 ease-out h-screen overflow-hidden"
     )}>
       <Header />
 
       {/* Main Content */}
       <main className={cn(
-        "mx-auto w-full max-w-3xl px-4 flex-1 flex flex-col relative transition-all duration-700 ease-out",
-        isSliding ? "pb-4" : "py-16"
+        "mx-auto w-full max-w-3xl px-4 flex-1 flex flex-col relative transition-all duration-700 ease-out overflow-hidden",
+        isSliding || isChatMode ? "pb-4" : "py-16"
       )}>
-        {/* Hero Section - Fades out LAST */}
+        {/* Hero Section - Fades out when typing or in chat mode */}
         <div
           className={cn(
-            "text-center overflow-hidden",
-            // Fade happens in fading-top phase
-            animationPhase === 'fading-top' || animationPhase === 'complete'
+            "text-center overflow-hidden shrink-0",
+            animationPhase === 'fading-top' || animationPhase === 'complete' || isChatMode
               ? "opacity-0 pointer-events-none"
               : "opacity-100",
-            // Height collapse happens AFTER fade completes (in 'complete' phase)
-            animationPhase === 'complete' ? "h-0 mb-0" : "mb-10",
-            // Transition timing
+            animationPhase === 'complete' || isChatMode ? "h-0 mb-0" : "mb-10",
             "transition-all duration-400 ease-out"
           )}
         >
@@ -198,13 +245,120 @@ export default function BuildPage() {
           </p>
         </div>
 
-        {/* Input Box Container - Expands to push content down when typing */}
+        {/* Chat Messages Area - Shows when in chat mode */}
+        {isChatMode && (
+          <div className="flex-1 overflow-y-auto mb-4 space-y-4 pt-4">
+            {messages.map((message, index) => {
+              if (message.type === "user") {
+                return (
+                  <div key={index} className="flex justify-end">
+                    <div className="flex items-start gap-3 max-w-[80%]">
+                      <div className="bg-blue-500 text-white px-4 py-3 rounded-2xl rounded-tr-md">
+                        <p className="text-sm">{message.content}</p>
+                      </div>
+                      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-blue-500/20">
+                        <User size={16} className="text-blue-500" />
+                      </div>
+                    </div>
+                  </div>
+                );
+              }
+
+              if (message.type === "loading") {
+                return (
+                  <div key={index} className="flex justify-start">
+                    <div className="flex items-start gap-3 max-w-[80%]">
+                      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-green-500/20">
+                        <Bot size={16} className="text-green-500" />
+                      </div>
+                      <div className="bg-card border border-border px-4 py-3 rounded-2xl rounded-tl-md">
+                        <div className="flex items-center gap-2">
+                          <Loader2 size={16} className="animate-spin text-muted-foreground" />
+                          <span className="text-sm text-muted-foreground">Generating your plan...</span>
+                        </div>
+                        <div className="mt-2 space-y-2">
+                          <div className="h-3 bg-muted rounded animate-pulse w-48" />
+                          <div className="h-3 bg-muted rounded animate-pulse w-36" />
+                          <div className="h-3 bg-muted rounded animate-pulse w-52" />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              }
+
+              if (message.type === "response") {
+                return (
+                  <div key={index} className="flex justify-start">
+                    <div className="flex items-start gap-3 max-w-[85%] w-full">
+                      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-green-500/20">
+                        <Bot size={16} className="text-green-500" />
+                      </div>
+                      <div className="flex-1">
+                        {/* Collapsible Card */}
+                        <div className="bg-card border border-border rounded-2xl rounded-tl-md overflow-hidden transition-all">
+                          {/* Card Header - Always visible, clickable */}
+                          <button
+                            onClick={() => toggleExpand(index)}
+                            className="w-full px-4 py-3 flex items-center justify-between hover:bg-muted/50 transition-colors cursor-pointer"
+                          >
+                            <div className="flex items-center gap-3">
+                              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-green-500/10">
+                                <FileText size={18} className="text-green-500" />
+                              </div>
+                              <div className="text-left">
+                                <p className="font-medium text-sm">{message.plan.title}</p>
+                                <p className="text-xs text-muted-foreground">Click to {message.isExpanded ? "collapse" : "expand"}</p>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <a
+                                href={message.plan.document_url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                onClick={(e) => e.stopPropagation()}
+                                className="flex items-center gap-1 px-3 py-1.5 rounded-full text-xs bg-muted hover:bg-muted/80 transition-colors"
+                              >
+                                <Download size={12} />
+                                Download
+                              </a>
+                              {message.isExpanded ? (
+                                <ChevronUp size={18} className="text-muted-foreground" />
+                              ) : (
+                                <ChevronDown size={18} className="text-muted-foreground" />
+                              )}
+                            </div>
+                          </button>
+
+                          {/* Expanded Content */}
+                          {message.isExpanded && (
+                            <div className="border-t border-border">
+                              <div className="p-4 max-h-96 overflow-y-auto">
+                                <pre className="whitespace-pre-wrap text-sm leading-relaxed font-mono bg-muted/50 p-4 rounded-xl">
+                                  {message.plan.content}
+                                </pre>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              }
+
+              return null;
+            })}
+            <div ref={chatEndRef} />
+          </div>
+        )}
+
+        {/* Input Box Container */}
         <div
           className={cn(
-            "transition-all duration-1000 ease-out",
-            // Expand after bottom sections have faded (sliding phase onwards)
-            isSliding
-              ? "flex-1 flex flex-col justify-end"
+            "transition-all duration-1000 ease-out shrink-0",
+            isSliding || isChatMode
+              ? "mt-auto"
               : "mb-10"
           )}
         >
@@ -214,6 +368,7 @@ export default function BuildPage() {
               <Textarea
                 value={prompt}
                 onChange={(e) => setPrompt(e.target.value)}
+                onKeyDown={handleKeyDown}
                 placeholder="Create an agent that..."
                 className="min-h-24 max-h-64 resize-none border-none bg-transparent p-0 text-base shadow-none ring-0 focus-visible:border-none focus-visible:ring-0 focus-visible:shadow-none rounded-none placeholder:text-muted-foreground/60 overflow-y-auto scrollbar-textarea"
                 data-gramm="false"
@@ -278,15 +433,12 @@ export default function BuildPage() {
           </div>
         </div>
 
-        {/* Example Prompts - Chips - Fades out FIRST */}
+        {/* Example Prompts - Chips - Fades out when typing or in chat mode */}
         <div
           className={cn(
-            "text-center overflow-hidden",
-            // Fade happens immediately when typing starts (fading-bottom and onwards)
-            isAnimating ? "opacity-0 pointer-events-none" : "opacity-100",
-            // Height collapse happens when sliding starts
-            isSliding ? "h-0" : "mb-16",
-            // Transition timing
+            "text-center overflow-hidden shrink-0",
+            isAnimating || isChatMode ? "opacity-0 pointer-events-none" : "opacity-100",
+            isSliding || isChatMode ? "h-0" : "mb-16",
             "transition-all duration-1000 ease-out"
           )}
         >
@@ -305,15 +457,12 @@ export default function BuildPage() {
           </div>
         </div>
 
-        {/* Previous Agents - Fades out FIRST */}
+        {/* Previous Agents - Fades out when typing or in chat mode */}
         <div
           className={cn(
-            "overflow-hidden",
-            // Fade happens immediately when typing starts (fading-bottom and onwards)
-            isAnimating ? "opacity-0 pointer-events-none" : "opacity-100",
-            // Height collapse happens when sliding starts
-            isSliding ? "h-0" : "",
-            // Transition timing
+            "overflow-hidden shrink-0",
+            isAnimating || isChatMode ? "opacity-0 pointer-events-none" : "opacity-100",
+            isSliding || isChatMode ? "h-0" : "",
             "transition-all duration-1000 ease-out"
           )}
         >
@@ -323,7 +472,6 @@ export default function BuildPage() {
           {previousAgents.length > 0 ? (
             <div className="space-y-3">
               {previousAgents.map((agent, index) => {
-                // Cycle through colors for visual interest
                 const colorVariants = [
                   { bg: "bg-blue-500/10", text: "text-blue-500" },
                   { bg: "bg-red-500/10", text: "text-red-500" },
@@ -337,7 +485,6 @@ export default function BuildPage() {
                     key={agent.id}
                     className="cursor-pointer group w-full text-left"
                     onClick={() => {
-                      // TODO: Navigate to agent
                       console.log("Open agent:", agent.id);
                     }}
                   >
