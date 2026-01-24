@@ -88,13 +88,13 @@ const useCases = [
 const steps = [
   {
     number: "01",
-    title: "Describe",
+    title: "Plan",
     description: "Tell us what you want your agent to do.",
     colorClass: "text-blue-500",
   },
   {
     number: "02",
-    title: "Customize",
+    title: "Iterate",
     description: "Refine your agent using the visual canvas editor.",
     colorClass: "text-green-500",
   },
