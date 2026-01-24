@@ -1,8 +1,9 @@
+import "./globals.css";
 import type { Metadata } from "next";
 import { Geist, Geist_Mono, Figtree } from "next/font/google";
 import { ThemeProvider } from "@/components/theme-provider";
-import "./globals.css";
 import { Toaster } from "@/components/ui/sonner";
+import { Analytics } from '@vercel/analytics/next';
 
 const figtree = Figtree({ subsets: ["latin"], variable: "--font-sans" });
 
@@ -38,6 +39,7 @@ export default function RootLayout({
           disableTransitionOnChange
         >
           {children}
+          <Analytics />
           <Toaster />
         </ThemeProvider>
       </body>
