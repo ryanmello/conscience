@@ -253,10 +253,10 @@ export default function BuildPage() {
                 return (
                   <div key={index} className="flex justify-end">
                     <div className="flex items-start gap-3 max-w-[80%]">
-                      <div className="bg-blue-500 text-white px-4 py-3 rounded-2xl rounded-tr-md">
+                      <div className="bg-blue-500 text-white px-4 py-3 rounded-md">
                         <p className="text-sm">{message.content}</p>
                       </div>
-                      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-blue-500/20">
+                      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-blue-500/20">
                         <User size={16} className="text-blue-500" />
                       </div>
                     </div>
@@ -268,7 +268,7 @@ export default function BuildPage() {
                 return (
                   <div key={index} className="flex justify-start">
                     <div className="flex items-start gap-3 max-w-[80%]">
-                      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-green-500/20">
+                      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-green-500/20">
                         <Bot size={16} className="text-green-500" />
                       </div>
                       <div className="bg-card border border-border px-4 py-3 rounded-2xl rounded-tl-md">
@@ -291,12 +291,12 @@ export default function BuildPage() {
                 return (
                   <div key={index} className="flex justify-start">
                     <div className="flex items-start gap-3 max-w-[85%] w-full">
-                      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-green-500/20">
+                      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-green-500/20">
                         <Bot size={16} className="text-green-500" />
                       </div>
                       <div className="flex-1">
                         {/* Collapsible Card */}
-                        <div className="bg-card border border-border rounded-2xl rounded-tl-md overflow-hidden transition-all">
+                        <div className="bg-card border border-border rounded-md overflow-hidden transition-all">
                           {/* Card Header - Always visible, clickable */}
                           <button
                             onClick={() => toggleExpand(index)}
@@ -333,8 +333,8 @@ export default function BuildPage() {
                           {/* Expanded Content */}
                           {message.isExpanded && (
                             <div className="border-t border-border">
-                              <div className="p-4 max-h-96 overflow-y-auto">
-                                <pre className="whitespace-pre-wrap text-sm leading-relaxed font-mono bg-muted/50 p-4 rounded-xl">
+                              <div className="p-4 max-h-96 overflow-y-auto scrollbar-textarea">
+                                <pre className="whitespace-pre-wrap text-sm leading-relaxed font-mono rounded-xl">
                                   {message.plan.content}
                                 </pre>
                               </div>
