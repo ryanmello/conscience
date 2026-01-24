@@ -37,3 +37,5 @@ class StorageService:
     def download_plan_document(self, file_path: str) -> str:
         response = self.client.storage.from_(BUCKET_NAME).download(file_path)
         return response.decode('utf-8')
+
+storage_service = StorageService()

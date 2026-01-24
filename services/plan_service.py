@@ -87,3 +87,5 @@ class PlanService:
             "title": title,
             "content": content
         }
+
+plan_service = PlanService()

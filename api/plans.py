@@ -3,8 +3,8 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
 from api.auth import get_current_user
-from services.storage_service import StorageService
-from services.plan_service import PlanService
+from services.storage_service import storage_service
+from services.plan_service import plan_service
 from utils.logger import get_logger
 
 router = APIRouter(prefix="/api/plans", tags=["plans"])
@@ -24,8 +24,6 @@ async def generate_plan(
     request: GeneratePlanRequest,
     user = Depends(get_current_user)
 ):
-    plan_service = PlanService()
-    storage_service = StorageService()
     plan_id = str(uuid4())
 
     try:
