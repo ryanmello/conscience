@@ -182,3 +182,15 @@
 .dark .scrollbar-textarea::-webkit-scrollbar-thumb {
   background-color: oklch(1 0 0 / 20%);
 }
+
+/* Hidden scrollbar - still scrollable */
+@layer utilities {
+  .scrollbar-hide {
+    -ms-overflow-style: none !important;
+    scrollbar-width: none !important;
+  }
+
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none !important;
+  }
+}

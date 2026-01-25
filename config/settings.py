@@ -25,6 +25,8 @@ class Settings:
     SUPABASE_PROJECT_URL: str = os.getenv("SUPABASE_PROJECT_URL", "")
     SUPABASE_SECRET_API_KEY: str = os.getenv("SUPABASE_SECRET_API_KEY", "")
 
+    MAX_FOLLOWUP_QUESTIONS: int = int(os.getenv("MAX_FOLLOWUP_QUESTIONS", "5"))
+
     @classmethod
     def get_cors_config(cls) -> dict:
         """Get CORS configuration dictionary."""

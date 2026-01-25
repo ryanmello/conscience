@@ -14,8 +14,11 @@ import {
   Loader2,
   Download,
   User,
+  Send,
+  Check,
 } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
+import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -26,10 +29,12 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Header } from "@/components/Header";
 import { MicButton } from "@/components/MicButton";
-import { generatePlan, GeneratePlanResult } from "../../actions/generate-plan";
 import { getModels } from "../../actions/get_models";
+import { approvePlan } from "../../actions/approve-plan";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { usePlanWebSocket, ChatMessage } from "@/hooks/usePlanWebSocket";
+
 
 const examplePrompts = [
   {
@@ -58,6 +63,7 @@ const examplePrompts = [
   },
 ];
 
+
 // Mock data for previous agents - will be replaced with real data from API
 const previousAgents = [
   {
@@ -74,26 +80,38 @@ const previousAgents = [
   },
 ];
 
-// Message types for the chat
-type Message = 
-  | { type: "user"; content: string }
-  | { type: "loading" }
-  | { type: "response"; plan: GeneratePlanResult; isExpanded: boolean };
 
 export default function BuildPage() {
   const [prompt, setPrompt] = React.useState("");
-  const [isLoading, setIsLoading] = React.useState(false);
+  const [answerInput, setAnswerInput] = React.useState("");
   const [models, setModels] = React.useState<string[] | null>(null);
   const [selectedModel, setSelectedModel] = React.useState<string>("Opus 4.5");
   const [isLoadingModels, setIsLoadingModels] = React.useState(false);
-  const [messages, setMessages] = React.useState<Message[]>([]);
+  const [isDocumentExpanded, setIsDocumentExpanded] = React.useState(false);
+  const [isApproving, setIsApproving] = React.useState(false);
   const chatEndRef = React.useRef<HTMLDivElement>(null);
 
-  // Track if we're in chat mode (has messages)
-  const isChatMode = messages.length > 0;
+  // WebSocket hook
+  const {
+    connectionState,
+    sessionId,
+    document,
+    messages,
+    currentQuestions,
+    currentProgress,
+    thinkingStatus,
+    isReadyForApproval,
+    error,
+    startPlan,
+    sendResponse,
+    disconnect,
+  } = usePlanWebSocket();
 
-  // Track if user is actively typing (has content in textarea)
+  // Derived state
+  const isConnecting = connectionState === "connecting";
+  const isChatMode = messages.length > 0;
   const isTyping = prompt.length > 0;
+  const hasCurrentQuestions = currentQuestions.length > 0;
 
   // Track animation phase: 'idle' -> 'fading-bottom' -> 'sliding' -> 'fading-top' -> 'complete'
   const [animationPhase, setAnimationPhase] = React.useState<'idle' | 'fading-bottom' | 'sliding' | 'fading-top' | 'complete'>('idle');
@@ -103,8 +121,16 @@ export default function BuildPage() {
     if (chatEndRef.current) {
       chatEndRef.current.scrollIntoView({ behavior: "smooth" });
     }
-  }, [messages]);
+  }, [messages, thinkingStatus, currentQuestions]);
 
+  // Handle errors
+  React.useEffect(() => {
+    if (error) {
+      toast.error(error);
+    }
+  }, [error]);
+
+  // Animation effect - triggers on typing OR entering chat mode
   React.useEffect(() => {
     if (isTyping || isChatMode) {
       // Phase 1: Fade out bottom sections (Try an example + Your agents)
@@ -158,51 +184,18 @@ export default function BuildPage() {
     }
   };
 
+
   const handleGenerate = async () => {
     if (!prompt.trim()) return;
-
-    const userMessage = prompt.trim();
+    const userPrompt = prompt.trim();
     setPrompt("");
-    
-    // Add user message and loading state
-    setMessages(prev => [
-      ...prev,
-      { type: "user", content: userMessage },
-      { type: "loading" }
-    ]);
-
-    setIsLoading(true);
-    try {
-      const result = await generatePlan(userMessage);
-
-      if (result.success && result.data) {
-        const plan = result.data;
-        // Replace loading with response
-        setMessages(prev => [
-          ...prev.filter(m => m.type !== "loading"),
-          { type: "response", plan, isExpanded: false }
-        ]);
-      } else {
-        // Remove loading on error
-        setMessages(prev => prev.filter(m => m.type !== "loading"));
-        toast.error("Error: " + result.error);
-      }
-    } catch (error) {
-      console.error("Error generating plan:", error);
-      setMessages(prev => prev.filter(m => m.type !== "loading"));
-      toast.error("Failed to generate plan");
-    } finally {
-      setIsLoading(false);
-    }
+    await startPlan(userPrompt);
   };
 
-  const toggleExpand = (index: number) => {
-    setMessages(prev => prev.map((msg, i) => {
-      if (i === index && msg.type === "response") {
-        return { ...msg, isExpanded: !msg.isExpanded };
-      }
-      return msg;
-    }));
+  const handleSendAnswer = () => {
+    if (!answerInput.trim() || !hasCurrentQuestions) return;
+    sendResponse(answerInput.trim());
+    setAnswerInput("");
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -212,24 +205,101 @@ export default function BuildPage() {
     }
   };
 
+  const handleAnswerKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      handleSendAnswer();
+    }
+  };
+
+  const handleApprove = async () => {
+    if (!document || !sessionId) return;
+
+    setIsApproving(true);
+    disconnect();
+
+    try {
+      const result = await approvePlan({
+        plan_id: sessionId,
+        title: document.title,
+        content: document.content,
+        version: document.version,
+      });
+
+      if (result.success && result.data) {
+        toast.success(result.data.message);
+      } else {
+        toast.error(result.error || "Failed to approve plan");
+      }
+    } catch (err) {
+      console.error("Error approving plan:", err);
+      toast.error("Failed to approve plan");
+    } finally {
+      setIsApproving(false);
+    }
+  };
+
   const isAnimating = animationPhase !== 'idle';
   const isSliding = animationPhase === 'sliding' || animationPhase === 'fading-top' || animationPhase === 'complete';
 
+  // Render a chat message
+  const renderMessage = (message: ChatMessage, index: number) => {
+    if (message.type === "user_prompt" || message.type === "user_answer") {
+      return (
+        <div key={index} className="flex justify-end">
+          <div className="flex items-start gap-3 max-w-[80%]">
+            <div className="bg-blue-500 text-white px-4 py-3 rounded-2xl rounded-tr-md">
+              <p className="text-sm">{message.content}</p>
+            </div>
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-blue-500/20">
+              <User size={16} className="text-blue-500" />
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    if (message.type === "questions") {
+      return (
+        <div key={index} className="flex justify-start">
+          <div className="flex items-start gap-3 max-w-[80%]">
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-green-500/20">
+              <Bot size={16} className="text-green-500" />
+            </div>
+            <div className="bg-card border border-border px-4 py-3 rounded-2xl rounded-tl-md space-y-2">
+              {message.questions.map((q, qIndex) => (
+                <p key={q.id || qIndex} className="text-sm">
+                  {message.questions.length > 1 ? `${qIndex + 1}. ` : ""}{q.text}
+                </p>
+              ))}
+              <p className="text-xs text-muted-foreground">
+                Round {message.progress.round} of {message.progress.max_rounds}
+              </p>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    return null;
+  };
+
   return (
     <div className={cn(
-      "bg-background flex flex-col transition-all duration-1000 ease-out h-screen overflow-hidden"
+      "bg-background flex flex-col transition-all duration-1000 ease-out",
+      isSliding || isChatMode ? "h-screen overflow-hidden" : "min-h-screen"
     )}>
       <Header />
 
       {/* Main Content */}
       <main className={cn(
-        "mx-auto w-full max-w-3xl px-4 flex-1 flex flex-col relative transition-all duration-700 ease-out overflow-hidden",
-        isSliding || isChatMode ? "pb-4" : "py-16"
+        "mx-auto w-full max-w-3xl px-4 flex-1 flex flex-col relative transition-all duration-700 ease-out",
+        isSliding || isChatMode ? "pb-4 min-h-0" : "py-16"
       )}>
-        {/* Hero Section - Fades out when typing or in chat mode */}
+        {/* Hero Section - Fades out LAST */}
         <div
           className={cn(
-            "text-center overflow-hidden shrink-0",
+            "text-center overflow-hidden",
             animationPhase === 'fading-top' || animationPhase === 'complete' || isChatMode
               ? "opacity-0 pointer-events-none"
               : "opacity-100",
@@ -247,130 +317,142 @@ export default function BuildPage() {
 
         {/* Chat Messages Area - Shows when in chat mode */}
         {isChatMode && (
-          <div className="flex-1 overflow-y-auto mb-4 space-y-4 pt-4">
-            {messages.map((message, index) => {
-              if (message.type === "user") {
-                return (
-                  <div key={index} className="flex justify-end">
-                    <div className="flex items-start gap-3 max-w-[80%]">
-                      <div className="bg-blue-500 text-white px-4 py-3 rounded-md">
-                        <p className="text-sm">{message.content}</p>
-                      </div>
-                      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-blue-500/20">
-                        <User size={16} className="text-blue-500" />
-                      </div>
-                    </div>
+          <div className="flex-1 min-h-0 relative">
+            {/* Top fade overlay */}
+            <div className="pointer-events-none absolute top-0 left-0 right-0 h-12 bg-linear-to-b from-background to-transparent z-10" />
+            <div className={cn("h-full overflow-y-auto space-y-4 pt-6 pb-4 scrollbar-hide")}>
+            {messages.map((message, index) => renderMessage(message, index))}
+
+            {/* Thinking indicator */}
+            {thinkingStatus && (
+              <div className="flex justify-start">
+                <div className="flex items-start gap-3 max-w-[80%]">
+                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-green-500/20">
+                    <Loader2 size={16} className="text-green-500 animate-spin" />
                   </div>
-                );
-              }
-
-              if (message.type === "loading") {
-                return (
-                  <div key={index} className="flex justify-start">
-                    <div className="flex items-start gap-3 max-w-[80%]">
-                      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-green-500/20">
-                        <Bot size={16} className="text-green-500" />
-                      </div>
-                      <div className="bg-card border border-border px-4 py-3 rounded-2xl rounded-tl-md">
-                        <div className="flex items-center gap-2">
-                          <Loader2 size={16} className="animate-spin text-muted-foreground" />
-                          <span className="text-sm text-muted-foreground">Generating your plan...</span>
-                        </div>
-                        <div className="mt-2 space-y-2">
-                          <div className="h-3 bg-muted rounded animate-pulse w-48" />
-                          <div className="h-3 bg-muted rounded animate-pulse w-36" />
-                          <div className="h-3 bg-muted rounded animate-pulse w-52" />
-                        </div>
-                      </div>
-                    </div>
+                  <div className="bg-card border border-border px-4 py-3 rounded-2xl rounded-tl-md">
+                    <p className="text-sm text-muted-foreground">{thinkingStatus.message}</p>
                   </div>
-                );
-              }
+                </div>
+              </div>
+            )}
 
-              if (message.type === "response") {
-                return (
-                  <div key={index} className="flex justify-start">
-                    <div className="flex items-start gap-3 max-w-[85%] w-full">
-                      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-green-500/20">
-                        <Bot size={16} className="text-green-500" />
-                      </div>
-                      <div className="flex-1">
-                        {/* Collapsible Card */}
-                        <div className="bg-card border border-border rounded-md overflow-hidden transition-all">
-                          {/* Card Header - Always visible, clickable */}
-                          <button
-                            onClick={() => toggleExpand(index)}
-                            className="w-full px-4 py-3 flex items-center justify-between hover:bg-muted/50 transition-colors cursor-pointer"
-                          >
-                            <div className="flex items-center gap-3">
-                              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-green-500/10">
-                                <FileText size={18} className="text-green-500" />
-                              </div>
-                              <div className="text-left">
-                                <p className="font-medium text-sm">{message.plan.title}</p>
-                                <p className="text-xs text-muted-foreground">Click to {message.isExpanded ? "collapse" : "expand"}</p>
-                              </div>
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <a
-                                href={message.plan.document_url}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                onClick={(e) => e.stopPropagation()}
-                                className="flex items-center gap-1 px-3 py-1.5 rounded-full text-xs bg-muted hover:bg-muted/80 transition-colors"
-                              >
-                                <Download size={12} />
-                                Download
-                              </a>
-                              {message.isExpanded ? (
-                                <ChevronUp size={18} className="text-muted-foreground" />
-                              ) : (
-                                <ChevronDown size={18} className="text-muted-foreground" />
-                              )}
-                            </div>
-                          </button>
-
-                          {/* Expanded Content */}
-                          {message.isExpanded && (
-                            <div className="border-t border-border">
-                              <div className="p-4 max-h-96 overflow-y-auto scrollbar-textarea">
-                                <pre className="whitespace-pre-wrap text-sm leading-relaxed font-mono rounded-xl">
-                                  {message.plan.content}
-                                </pre>
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    </div>
+            {/* Current questions waiting for response */}
+            {hasCurrentQuestions && currentProgress && (
+              <div className="flex justify-start">
+                <div className="flex items-start gap-3 max-w-[80%]">
+                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-green-500/20">
+                    <Bot size={16} className="text-green-500" />
                   </div>
-                );
-              }
+                  <div className="bg-card border border-border px-4 py-3 rounded-2xl rounded-tl-md space-y-2">
+                    {currentQuestions.map((q, qIndex) => (
+                      <p key={q.id || qIndex} className="text-sm">
+                        {currentQuestions.length > 1 ? `${qIndex + 1}. ` : ""}{q.text}
+                      </p>
+                    ))}
+                    <p className="text-xs text-muted-foreground">
+                      Round {currentProgress.round} of {currentProgress.max_rounds}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
 
-              return null;
-            })}
             <div ref={chatEndRef} />
+            </div>
           </div>
         )}
 
-        {/* Input Box Container */}
+        {/* Document Panel - Shows when document exists */}
+        {document && (
+          <div className="mb-4 shrink-0">
+            <div className="bg-card border border-border rounded-xl overflow-hidden">
+              <div
+                role="button"
+                tabIndex={0}
+                onClick={() => setIsDocumentExpanded(!isDocumentExpanded)}
+                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') setIsDocumentExpanded(!isDocumentExpanded); }}
+                className="w-full px-4 py-3 flex items-center justify-between hover:bg-muted/50 transition-colors cursor-pointer"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-green-500/10">
+                    <FileText size={18} className="text-green-500" />
+                  </div>
+                  <div className="text-left">
+                    <p className="font-medium text-sm">{document.title}</p>
+                    <p className="text-xs text-muted-foreground">
+                      Version {document.version} • Click to {isDocumentExpanded ? "collapse" : "expand"}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  {document.url && (
+                    <a
+                      href={document.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      onClick={(e) => e.stopPropagation()}
+                      className="flex items-center gap-1 px-3 py-1.5 rounded-full text-xs bg-muted hover:bg-muted/80 transition-colors"
+                    >
+                      <Download size={12} />
+                      Download
+                    </a>
+                  )}
+                  {isReadyForApproval && (
+                    <Button
+                      size="xs"
+                      onClick={(e) => { e.stopPropagation(); handleApprove(); }}
+                      disabled={isApproving}
+                      className="bg-green-500 text-white hover:bg-green-600"
+                    >
+                      {isApproving ? <Loader2 size={12} className="animate-spin" /> : <Check size={12} />}
+                      {isApproving ? "Approving..." : "Approve"}
+                    </Button>
+                  )}
+                  {isDocumentExpanded ? (
+                    <ChevronDown size={18} className="text-muted-foreground" />
+                  ) : (
+                    <ChevronUp size={18} className="text-muted-foreground" />
+                  )}
+                </div>
+              </div>
+              {isDocumentExpanded && (
+                <div className="border-t border-border">
+                  <div className="p-4 max-h-[40vh] overflow-y-auto scrollbar-textarea">
+                    <pre className="whitespace-pre-wrap text-sm leading-relaxed font-mono">
+                      {document.content}
+                    </pre>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Input Box Container - Expands to push content down when typing */}
         <div
           className={cn(
-            "transition-all duration-1000 ease-out shrink-0",
-            isSliding || isChatMode
-              ? "mt-auto"
-              : "mb-10"
+            !isChatMode && "transition-all duration-1000 ease-out shrink-0",
+            isChatMode
+              ? "" // In chat mode, don't expand - let chat messages take the space
+              : isSliding
+                ? "flex-1 flex flex-col justify-end" // During animation, expand to push down
+                : "mb-10" // Initial state with margin
           )}
         >
           <div className="overflow-hidden rounded-3xl border border-border bg-card shadow-sm hover:shadow-md transition-shadow">
             {/* Textarea */}
             <div className="px-5 py-4">
               <Textarea
-                value={prompt}
-                onChange={(e) => setPrompt(e.target.value)}
-                onKeyDown={handleKeyDown}
-                placeholder="Create an agent that..."
-                className="min-h-24 max-h-64 resize-none border-none bg-transparent p-0 text-base shadow-none ring-0 focus-visible:border-none focus-visible:ring-0 focus-visible:shadow-none rounded-none placeholder:text-muted-foreground/60 overflow-y-auto scrollbar-textarea"
+                value={isChatMode ? answerInput : prompt}
+                onChange={(e) => isChatMode ? setAnswerInput(e.target.value) : setPrompt(e.target.value)}
+                onKeyDown={isChatMode ? handleAnswerKeyDown : handleKeyDown}
+                placeholder={isChatMode
+                  ? (hasCurrentQuestions ? "Type your answer..." : "Waiting for response...")
+                  : "Create an agent that..."
+                }
+                disabled={isChatMode && !hasCurrentQuestions}
+                className="min-h-24 max-h-64 resize-none border-none bg-transparent p-0 text-base shadow-none ring-0 focus-visible:border-none focus-visible:ring-0 focus-visible:shadow-none rounded-none placeholder:text-muted-foreground/60 overflow-y-auto scrollbar-textarea disabled:opacity-50 disabled:cursor-not-allowed"
                 data-gramm="false"
                 data-gramm_editor="false"
                 data-enable-grammarly="false"
@@ -417,26 +499,37 @@ export default function BuildPage() {
                 </DropdownMenu>
 
                 {/* Mic Button */}
-                <MicButton setPrompt={setPrompt} />
+                <MicButton setPrompt={isChatMode ? setAnswerInput : setPrompt} />
               </div>
 
-              {/* Generate Button */}
-              <button
-                onClick={handleGenerate}
-                disabled={!prompt.trim() || isLoading}
-                className="cursor-pointer flex h-9 items-center gap-2 rounded-full bg-blue-500 px-5 text-sm font-medium text-white transition-all hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:shadow-none"
-              >
-                <Sparkles size={16} className={isLoading ? "animate-spin" : ""} />
-                {isLoading ? "Generating..." : "Generate"}
-              </button>
+              {/* Action Button */}
+              {isChatMode ? (
+                <button
+                  onClick={handleSendAnswer}
+                  disabled={!answerInput.trim() || !hasCurrentQuestions}
+                  className="cursor-pointer flex h-9 items-center gap-2 rounded-full bg-blue-500 px-5 text-sm font-medium text-white transition-all hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:shadow-none"
+                >
+                  <Send size={16} />
+                  Send
+                </button>
+              ) : (
+                <button
+                  onClick={handleGenerate}
+                  disabled={!prompt.trim() || isConnecting}
+                  className="cursor-pointer flex h-9 items-center gap-2 rounded-full bg-blue-500 px-5 text-sm font-medium text-white transition-all hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:shadow-none"
+                >
+                  <Sparkles size={16} className={isConnecting ? "animate-spin" : ""} />
+                  {isConnecting ? "Connecting..." : "Generate"}
+                </button>
+              )}
             </div>
           </div>
         </div>
 
-        {/* Example Prompts - Chips - Fades out when typing or in chat mode */}
+        {/* Example Prompts - Chips - Fades out FIRST */}
         <div
           className={cn(
-            "text-center overflow-hidden shrink-0",
+            "text-center overflow-hidden",
             isAnimating || isChatMode ? "opacity-0 pointer-events-none" : "opacity-100",
             isSliding || isChatMode ? "h-0" : "mb-16",
             "transition-all duration-1000 ease-out"
@@ -457,10 +550,10 @@ export default function BuildPage() {
           </div>
         </div>
 
-        {/* Previous Agents - Fades out when typing or in chat mode */}
+        {/* Previous Agents - Fades out FIRST */}
         <div
           className={cn(
-            "overflow-hidden shrink-0",
+            "overflow-hidden",
             isAnimating || isChatMode ? "opacity-0 pointer-events-none" : "opacity-100",
             isSliding || isChatMode ? "h-0" : "",
             "transition-all duration-1000 ease-out"
@@ -472,6 +565,7 @@ export default function BuildPage() {
           {previousAgents.length > 0 ? (
             <div className="space-y-3">
               {previousAgents.map((agent, index) => {
+                // Cycle through colors for visual interest
                 const colorVariants = [
                   { bg: "bg-blue-500/10", text: "text-blue-500" },
                   { bg: "bg-red-500/10", text: "text-red-500" },
@@ -480,11 +574,13 @@ export default function BuildPage() {
                 ];
                 const colorVariant = colorVariants[index % colorVariants.length];
 
+
                 return (
                   <button
                     key={agent.id}
                     className="cursor-pointer group w-full text-left"
                     onClick={() => {
+                      // TODO: Navigate to agent
                       console.log("Open agent:", agent.id);
                     }}
                   >
