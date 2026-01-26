@@ -22,10 +22,10 @@ export async function approvePlan(
   data?: ApprovePlanResult;
   error?: string;
 }> {
-  const apiUrl = process.env.BACKEND_API_URL;
+  const apiUrl = process.env.NEXT_PUBLIC_API_URL;
 
   if (!apiUrl) {
-    return { success: false, error: "BACKEND_API_URL is not configured" };
+    return { success: false, error: "NEXT_PUBLIC_API_URL is not configured" };
   }
 
   const supabase = await createClient();
@@ -39,7 +39,7 @@ export async function approvePlan(
   }
 
   try {
-    const response = await fetch(`${apiUrl}/api/plans/approve`, {
+    const response = await fetch(`${apiUrl}/api/plan/approve`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",

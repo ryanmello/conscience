@@ -22,9 +22,9 @@ def create_app() -> FastAPI:
     # app.add_event_handler("startup", startup_event)
     app.add_event_handler("shutdown", shutdown_event)
 
-    from api import conscience, plans
+    from api import conscience, plan
     app.include_router(conscience.router)
-    app.include_router(plans.router)
+    app.include_router(plan.router)
 
     return app
 

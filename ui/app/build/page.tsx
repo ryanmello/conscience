@@ -315,50 +315,47 @@ export default function BuildPage() {
           </p>
         </div>
 
-        {/* Chat Messages Area - Shows when in chat mode */}
+        {/* Chat Messages Area - Shows wheFn in chat mode */}
         {isChatMode && (
           <div className="flex-1 min-h-0 relative">
             {/* Top fade overlay */}
-            <div className="pointer-events-none absolute top-0 left-0 right-0 h-12 bg-linear-to-b from-background to-transparent z-10" />
+            {/* <div className="pointer-events-none absolute top-0 left-0 right-0 h-12 bg-linear-to-b from-background to-transparent z-10" /> */}
             <div className={cn("h-full overflow-y-auto space-y-4 pt-6 pb-4 scrollbar-hide")}>
-            {messages.map((message, index) => renderMessage(message, index))}
+              {messages.map((message, index) => renderMessage(message, index))}
 
-            {/* Thinking indicator */}
-            {thinkingStatus && (
-              <div className="flex justify-start">
-                <div className="flex items-start gap-3 max-w-[80%]">
-                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-green-500/20">
-                    <Loader2 size={16} className="text-green-500 animate-spin" />
-                  </div>
-                  <div className="bg-card border border-border px-4 py-3 rounded-2xl rounded-tl-md">
-                    <p className="text-sm text-muted-foreground">{thinkingStatus.message}</p>
+              {/* Thinking indicator */}
+              {thinkingStatus && (
+                <div className="flex justify-start">
+                  <div className="flex items-start gap-3 max-w-[80%]">
+                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-green-500/20">
+                      <Loader2 size={16} className="text-green-500 animate-spin" />
+                    </div>
+                    <div className="bg-card border border-border px-4 py-3 rounded-2xl rounded-tl-md">
+                      <p className="text-sm text-muted-foreground">{thinkingStatus.message}</p>
+                    </div>
                   </div>
                 </div>
-              </div>
-            )}
+              )}
 
-            {/* Current questions waiting for response */}
-            {hasCurrentQuestions && currentProgress && (
-              <div className="flex justify-start">
-                <div className="flex items-start gap-3 max-w-[80%]">
-                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-green-500/20">
-                    <Bot size={16} className="text-green-500" />
-                  </div>
-                  <div className="bg-card border border-border px-4 py-3 rounded-2xl rounded-tl-md space-y-2">
-                    {currentQuestions.map((q, qIndex) => (
-                      <p key={q.id || qIndex} className="text-sm">
-                        {currentQuestions.length > 1 ? `${qIndex + 1}. ` : ""}{q.text}
-                      </p>
-                    ))}
-                    <p className="text-xs text-muted-foreground">
-                      Round {currentProgress.round} of {currentProgress.max_rounds}
-                    </p>
+              {/* Current questions waiting for response */}
+              {hasCurrentQuestions && currentProgress && (
+                <div className="flex justify-start">
+                  <div className="flex items-start gap-3 max-w-[80%]">
+                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-green-500/20">
+                      <Bot size={16} className="text-green-500" />
+                    </div>
+                    <div className="bg-card border border-border px-4 py-3 rounded-2xl rounded-tl-md space-y-2">
+                      {currentQuestions.map((q, qIndex) => (
+                        <p key={q.id || qIndex} className="text-sm">
+                          {currentQuestions.length > 1 ? `${qIndex + 1}. ` : ""}{q.text}
+                        </p>
+                      ))}
+                    </div>
                   </div>
                 </div>
-              </div>
-            )}
+              )}
 
-            <div ref={chatEndRef} />
+              <div ref={chatEndRef} />
             </div>
           </div>
         )}

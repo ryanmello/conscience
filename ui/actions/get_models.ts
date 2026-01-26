@@ -3,7 +3,7 @@
 import { createClient } from "@/lib/supabase/server";
 
 export async function getModels() {
-    const apiUrl = process.env.BACKEND_API_URL;
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL;
 
     const supabase = await createClient();
     const { data: { session }, error: sessionError } = await supabase.auth.getSession();

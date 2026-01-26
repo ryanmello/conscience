@@ -10,21 +10,20 @@ from utils.logger import get_logger
 logger = get_logger(__name__)
 
 security = HTTPBearer()
-_jwks_client: Optional[PyJWKClient] = None
+jwks_client: Optional[PyJWKClient] = None
 
-# WebSocket close codes for auth errors
 WS_CLOSE_AUTH_REQUIRED = 4001
 WS_CLOSE_AUTH_FAILED = 4003
 
 def get_jwks_client() -> PyJWKClient:
     """Get or create cached JWKS client for Supabase token verification."""
-    global _jwks_client
-    if _jwks_client is None:
+    global jwks_client
+    if jwks_client is None:
         if not settings.SUPABASE_PROJECT_URL:
             raise ValueError("SUPABASE_PROJECT_URL not configured")
         jwks_url = f"{settings.SUPABASE_PROJECT_URL}/auth/v1/.well-known/jwks.json"
-        _jwks_client = PyJWKClient(jwks_url, cache_keys=True)
-    return _jwks_client
+        jwks_client = PyJWKClient(jwks_url, cache_keys=True)
+    return jwks_client
 
 class User(BaseModel):
     """Authenticated user from Supabase JWT."""
@@ -81,11 +80,10 @@ def validate_token(token: str) -> User:
         logger.error(f"Unexpected auth error: {type(e).__name__}: {e}")
         raise AuthError("Invalid token")
 
-
 async def get_current_user(
     credentials: HTTPAuthorizationCredentials = Depends(security)
 ) -> User:
-    """Validate Supabase JWT and return authenticated user. Raises 401 if invalid."""
+    """Validate Supabase JWT and return authenticated user. """
     try:
         return validate_token(credentials.credentials)
     except AuthError as e:
@@ -96,14 +94,10 @@ async def get_current_user(
         )
         raise HTTPException(status_code=status_code, detail=e.message)
 
-
 async def get_current_user_ws(websocket: WebSocket) -> User:
     """
     Validate Supabase JWT for WebSocket connections.
     Token should be passed as query parameter: ws://...?token=xxx
-    
-    Returns User on success.
-    Closes connection and raises exception on failure.
     """
     token = websocket.query_params.get("token")
     

@@ -3,10 +3,10 @@
 import { createClient } from "@/lib/supabase/server";
 
 export async function processInput(input: string) {
-  const apiUrl = process.env.BACKEND_API_URL;
+  const apiUrl = process.env.NEXT_PUBLIC_API_URL;
   
   if (!apiUrl) {
-    return { success: false, error: "BACKEND_API_URL is not configured" };
+    return { success: false, error: "NEXT_PUBLIC_API_URL is not configured" };
   }
 
   const supabase = await createClient();

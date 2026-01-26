@@ -49,9 +49,9 @@ class PlanService:
     def __init__(self):
         self.client = AsyncAnthropic(api_key=settings.ANTHROPIC_API_KEY)
         self.checkpointer = MemorySaver()
-        self.graph = self._create_plan_graph()
+        self.graph = self.create_plan_graph()
 
-    def _format_messages(self, messages: List[ConversationMessage]) -> str:
+    def format_messages(self, messages: List[ConversationMessage]) -> str:
         """Format messages for prompt injection."""
         formatted = []
         for msg in messages:
@@ -59,7 +59,7 @@ class PlanService:
             formatted.append(f"{role}: {msg['content']}")
         return "\n\n".join(formatted)
 
-    def _extract_json(self, text: str) -> dict:
+    def extract_json(self, text: str) -> dict:
         """
         Extract JSON from LLM response that may contain markdown code blocks.
         Handles responses like:
@@ -112,7 +112,7 @@ class PlanService:
         logger.error(f"Failed to extract JSON from response: {text[:500]}...")
         raise json.JSONDecodeError("Could not extract valid JSON from response", text, 0)
 
-    async def _call_llm(self, system_prompt: str, user_message: str) -> str:
+    async def call_llm(self, system_prompt: str, user_message: str) -> str:
         """Make an LLM call and return the response text."""
         response = await self.client.messages.create(
             model="claude-sonnet-4-20250514",
@@ -122,7 +122,7 @@ class PlanService:
         )
         return response.content[0].text
 
-    async def _evaluate_node(self, state: PlanGenerationState) -> dict:
+    async def evaluate_node(self, state: PlanGenerationState) -> dict:
         """
         Analyze conversation history and determine if we have enough 
         information about the agent's functionality.
@@ -136,17 +136,17 @@ class PlanService:
             "message": "Analyzing your request..."
         })
         
-        formatted_messages = self._format_messages(state["messages"])
+        formatted_messages = self.format_messages(state["messages"])
         prompt = EVALUATE_CONTEXT_PROMPT.format(messages=formatted_messages)
         
         try:
-            response = await self._call_llm(
+            response = await self.call_llm(
                 "You are an evaluation assistant. Respond only in valid JSON.",
                 prompt
             )
             
             # Parse JSON response (handles markdown code blocks)
-            result = self._extract_json(response)
+            result = self.extract_json(response)
             needs_more_info = result.get("needs_more_info", False)
             gaps = result.get("gaps", [])
             
@@ -154,14 +154,14 @@ class PlanService:
             
             return {
                 "needs_more_info": needs_more_info,
-                "_gaps": gaps  # Internal use for question generation
+                "gaps": gaps  # Internal use for question generation
             }
         except (json.JSONDecodeError, Exception) as e:
             logger.error(f"[{state['session_id']}] Evaluation failed: {e}")
             # On error, proceed to generate plan with what we have
             return {"needs_more_info": False}
 
-    async def _generate_questions_node(self, state: PlanGenerationState) -> dict:
+    async def generate_questions_node(self, state: PlanGenerationState) -> dict:
         """
         Generate 1-3 follow-up questions to explore the agent's functionality.
         """
@@ -173,8 +173,8 @@ class PlanService:
             "message": "Preparing follow-up questions..."
         })
         
-        formatted_messages = self._format_messages(state["messages"])
-        gaps = state.get("_gaps", ["General clarification needed"])
+        formatted_messages = self.format_messages(state["messages"])
+        gaps = state.get("gaps", ["General clarification needed"])
         
         prompt = GENERATE_QUESTIONS_PROMPT.format(
             messages=formatted_messages,
@@ -182,13 +182,13 @@ class PlanService:
         )
         
         try:
-            response = await self._call_llm(
+            response = await self.call_llm(
                 "You are a question generation assistant. Respond only in valid JSON.",
                 prompt
             )
             
             # Parse JSON response (handles markdown code blocks)
-            result = self._extract_json(response)
+            result = self.extract_json(response)
             questions = result.get("questions", [])
             
             logger.info(f"[{state['session_id']}] Generated {len(questions)} questions")
@@ -199,7 +199,7 @@ class PlanService:
             # On error, proceed without questions
             return {"current_questions": [], "needs_more_info": False}
 
-    async def _wait_for_response_node(self, state: PlanGenerationState) -> dict:
+    async def wait_for_response_node(self, state: PlanGenerationState) -> dict:
         """
         Send questions to frontend via WebSocket and wait for user response.
         Uses LangGraph's interrupt() to pause execution.
@@ -243,7 +243,7 @@ class PlanService:
             "current_questions": None
         }
 
-    async def _generate_plan_node(self, state: PlanGenerationState) -> dict:
+    async def generate_plan_node(self, state: PlanGenerationState) -> dict:
         """
         Generate the comprehensive plan document using all gathered context.
         """
@@ -256,17 +256,17 @@ class PlanService:
             "message": "Generating your plan document..."
         })
         
-        formatted_messages = self._format_messages(state["messages"])
+        formatted_messages = self.format_messages(state["messages"])
         prompt = GENERATE_PLAN_PROMPT.format(messages=formatted_messages)
         
         try:
-            response = await self._call_llm(
+            response = await self.call_llm(
                 "You are a plan generation assistant. Respond only in valid JSON.",
                 prompt
             )
             
             # Parse JSON response (handles markdown code blocks)
-            result = self._extract_json(response)
+            result = self.extract_json(response)
             title = result.get("title", "Untitled Plan")
             content = result.get("content", "")
             
@@ -306,7 +306,7 @@ class PlanService:
             await websocket_service.send_error(session_id, f"Failed to generate plan: {str(e)}")
             raise
 
-    def _route_after_evaluation(self, state: PlanGenerationState) -> str:
+    def route_after_evaluation(self, state: PlanGenerationState) -> str:
         """Determine next node after evaluation."""
         # Check if we've hit the question limit
         if state["questions_asked"] >= settings.MAX_FOLLOWUP_QUESTIONS:
@@ -319,15 +319,15 @@ class PlanService:
         
         return "generate_plan"
 
-    def _create_plan_graph(self):
+    def create_plan_graph(self):
         """Create and compile the LangGraph state machine."""
         graph = StateGraph(PlanGenerationState)
         
         # Add nodes
-        graph.add_node("evaluate", self._evaluate_node)
-        graph.add_node("generate_questions", self._generate_questions_node)
-        graph.add_node("wait_for_response", self._wait_for_response_node)
-        graph.add_node("generate_plan", self._generate_plan_node)
+        graph.add_node("evaluate", self.evaluate_node)
+        graph.add_node("generate_questions", self.generate_questions_node)
+        graph.add_node("wait_for_response", self.wait_for_response_node)
+        graph.add_node("generate_plan", self.generate_plan_node)
         
         # Set entry point
         graph.set_entry_point("evaluate")
@@ -335,7 +335,7 @@ class PlanService:
         # Add conditional edges from evaluate
         graph.add_conditional_edges(
             "evaluate",
-            self._route_after_evaluation,
+            self.route_after_evaluation,
             {
                 "generate_questions": "generate_questions",
                 "generate_plan": "generate_plan"
@@ -413,14 +413,14 @@ class PlanService:
                 ]
             )
             
-            result = self._parse_response(response.content[0].text)
+            result = self.parse_response(response.content[0].text)
             logger.info(f"Generated plan: {result['title']}")
             return result
         except Exception as e:
             logger.error(f"Failed to generate plan: {e}")
             raise
 
-    def _parse_response(self, response: str) -> dict:
+    def parse_response(self, response: str) -> dict:
         title_match = re.search(r'<title>(.*?)</title>', response, re.DOTALL)
         plan_match = re.search(r'<plan>(.*?)</plan>', response, re.DOTALL)
         

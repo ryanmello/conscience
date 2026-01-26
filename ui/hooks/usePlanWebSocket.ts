@@ -131,7 +131,7 @@ export function usePlanWebSocket() {
 
     // Get WebSocket URL from environment
     const wsUrl = process.env.NEXT_PUBLIC_BACKEND_WS_URL || "ws://localhost:8000";
-    const fullUrl = `${wsUrl}/api/plans/ws/generate?token=${session.access_token}`;
+    const fullUrl = `${wsUrl}/api/plan/ws/generate?token=${session.access_token}`;
 
     try {
       const ws = new WebSocket(fullUrl);

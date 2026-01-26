@@ -186,10 +186,10 @@ Once authenticated, the frontend needs to send the access token to the backend f
 import { createClient } from "@/lib/supabase/server";
 
 export async function processInput(input: string) {
-  const apiUrl = process.env.BACKEND_API_URL;
+  const apiUrl = process.env.NEXT_PUBLIC_API_URL;
   
   if (!apiUrl) {
-    return { success: false, error: "BACKEND_API_URL is not configured" };
+    return { success: false, error: "NEXT_PUBLIC_API_URL is not configured" };
   }
 
   // Get the current session from Supabase
@@ -366,7 +366,7 @@ The Supabase client automatically refreshes tokens before they expire:
 | `NEXT_PUBLIC_SUPABASE_URL` | Your Supabase project URL |
 | `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | Supabase anon/public key |
 | `NEXT_PUBLIC_SITE_URL` | Your application's URL (for redirects) |
-| `BACKEND_API_URL` | URL of the Python backend |
+| `NEXT_PUBLIC_API_URL` | URL of the Python backend |
 
 ### Backend (FastAPI)
 

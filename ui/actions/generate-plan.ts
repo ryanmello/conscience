@@ -14,10 +14,10 @@ export async function generatePlan(prompt: string): Promise<{
   data?: GeneratePlanResult;
   error?: string;
 }> {
-  const apiUrl = process.env.BACKEND_API_URL;
+  const apiUrl = process.env.NEXT_PUBLIC_API_URL;
 
   if (!apiUrl) {
-    return { success: false, error: "BACKEND_API_URL is not configured" };
+    return { success: false, error: "NEXT_PUBLIC_API_URL is not configured" };
   }
 
   const supabase = await createClient();
@@ -31,7 +31,7 @@ export async function generatePlan(prompt: string): Promise<{
   }
 
   try {
-    const response = await fetch(`${apiUrl}/api/plans/generate`, {
+    const response = await fetch(`${apiUrl}/api/plan/generate`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",

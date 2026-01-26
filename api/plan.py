@@ -4,36 +4,15 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
 from api.auth import get_current_user, get_current_user_ws
+from models.api import ApproveDocumentRequest, ApprovePlanResponse, GeneratePlanRequest, GeneratePlanResponse
 from services.websocket_service import websocket_service
 from services.storage_service import storage_service
 from services.plan_service import plan_service
 from utils.logger import get_logger
 from fastapi import WebSocket, WebSocketDisconnect
 
-router = APIRouter(prefix="/api/plans", tags=["plans"])
+router = APIRouter(prefix="/api/plan", tags=["plan"])
 logger = get_logger(__name__)
-
-
-# Request/Response models
-class GeneratePlanRequest(BaseModel):
-    prompt: str
-
-class GeneratePlanResponse(BaseModel):
-    plan_id: str
-    title: str
-    document_url: str
-    content: str
-
-class ApproveDocumentRequest(BaseModel):
-    plan_id: str
-    title: str
-    content: str
-    version: int
-
-class ApprovePlanResponse(BaseModel):
-    success: bool
-    message: str
-    document_url: Optional[str] = None
 
 @router.post("/generate", response_model=GeneratePlanResponse)
 async def generate_plan(
@@ -93,7 +72,6 @@ async def websocket_generate_plan(
 
     except WebSocketDisconnect:
         await websocket_service.disconnect_websocket(session_id)
-
 
 @router.post("/approve", response_model=ApprovePlanResponse)
 async def approve_plan(
