@@ -13,6 +13,7 @@ export interface ApprovePlanResult {
   success: boolean;
   message: string;
   document_url?: string;
+  agent_id?: string;
 }
 
 export async function approvePlan(

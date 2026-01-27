@@ -34,7 +34,7 @@ import { approvePlan } from "../../actions/approve-plan";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { usePlanWebSocket, ChatMessage } from "@/hooks/usePlanWebSocket";
-
+import { useRouter } from "next/navigation";
 
 const examplePrompts = [
   {
@@ -82,6 +82,8 @@ const previousAgents = [
 
 
 export default function BuildPage() {
+  const router = useRouter()
+  
   const [prompt, setPrompt] = React.useState("");
   const [answerInput, setAnswerInput] = React.useState("");
   const [models, setModels] = React.useState<string[] | null>(null);
@@ -226,7 +228,9 @@ export default function BuildPage() {
       });
 
       if (result.success && result.data) {
-        toast.success(result.data.message);
+        if (result.data.agent_id) {
+          router.push(`/build/${result.data.agent_id}`);
+        }
       } else {
         toast.error(result.error || "Failed to approve plan");
       }
