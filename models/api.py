@@ -20,4 +20,5 @@ class ApprovePlanResponse(BaseModel):
     success: bool
     message: str
     document_url: Optional[str] = None
+    agent_id: Optional[str] = None
     

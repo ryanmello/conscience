@@ -1,15 +1,18 @@
 from typing import Optional
-from uuid import uuid4
+from uuid import UUID, uuid4
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
+from sqlalchemy.orm import Session
 
 from api.auth import get_current_user, get_current_user_ws
+from models import Agent, Plan
 from models.api import ApproveDocumentRequest, ApprovePlanResponse, GeneratePlanRequest, GeneratePlanResponse
 from services.websocket_service import websocket_service
 from services.storage_service import storage_service
 from services.plan_service import plan_service
 from utils.logger import get_logger
 from fastapi import WebSocket, WebSocketDisconnect
+from db.database import get_db
 
 router = APIRouter(prefix="/api/plan", tags=["plan"])
 logger = get_logger(__name__)
@@ -76,7 +79,8 @@ async def websocket_generate_plan(
 @router.post("/approve", response_model=ApprovePlanResponse)
 async def approve_plan(
     request: ApproveDocumentRequest,
-    user = Depends(get_current_user)
+    user = Depends(get_current_user),
+    db: Session = Depends(get_db)
 ):
     """
     Approve the refined document and prepare for next phase (e.g., code generation).
@@ -93,19 +97,32 @@ async def approve_plan(
         )
         document_url = storage_service.get_signed_url(file_path)
         
-        # TODO: Add logic here for next phase
-        # Examples:
-        # - Save to database with "approved" status
-        # - Trigger code generation service
-        # - Queue background job for agent building
-        # - Notify other services
+        plan = Plan(
+            user_id=UUID(user.id),
+            title=request.title,
+            document_url=document_url,
+            document_path=file_path,
+            status="approved"
+        )
+        db.add(plan)
+        db.flush()
+
+        agent = Agent(
+            user_id=UUID(user.id),
+            plan_id=plan.id,
+            name=request.title,
+            status="building"
+        )
+        db.add(agent)
+        db.commit()
         
-        logger.info(f"Plan {request.plan_id} approved and saved")
+        logger.info(f"Plan {plan.id} and Agent {agent.id} created for user {user.id}")
         
         return ApprovePlanResponse(
             success=True,
             message="Document approved successfully",
-            document_url=document_url
+            document_url=document_url,
+            agent_id=str(agent.id)
         )
     except Exception as e:
         logger.error(f"Failed to approve plan: {e}")
