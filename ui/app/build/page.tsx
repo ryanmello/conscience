@@ -184,7 +184,6 @@ export default function BuildPage() {
     }
   };
 
-
   const handleGenerate = async () => {
     if (!prompt.trim()) return;
     const userPrompt = prompt.trim();

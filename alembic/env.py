@@ -8,7 +8,7 @@ from alembic import context
 # Import your models and settings
 from config.settings import settings
 from db.database import Base
-from models import Environment
+from models import Plan, Agent
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
