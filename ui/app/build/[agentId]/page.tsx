@@ -7,12 +7,6 @@ import {
   ResizablePanel,
   ResizableHandle,
 } from '@/components/ui/resizable';
-import {
-  FileText,
-  Code,
-} from 'lucide-react';
-import PlanViewer from '@/components/build/PlanViewer';
-import CodeViewer from '@/components/build/CodeViewer';
 import ChatPanel, { ChatMessage, mockChatMessages } from '@/components/build/ChatPanel';
 import ExecutionLogs, { mockLogs } from '@/components/build/ExecutionLogs';
 import SandboxHeader, { Agent, mockAgent } from '@/components/build/SandboxHeader';
@@ -131,7 +125,7 @@ export default function AgentSandbox() {
   const agentId = params.agentId as string;
 
   // State
-  const [activeLeftTab, setActiveLeftTab] = useState<'plan' | 'code'>('plan');
+  const [isLeftPanelCollapsed, setIsLeftPanelCollapsed] = useState(false);
   const [isRunning, setIsRunning] = useState(false);
   const [agent, setAgent] = useState<Agent>({ ...mockAgent, id: agentId });
   const [logs, setLogs] = useState(mockLogs);
@@ -178,11 +172,6 @@ export default function AgentSandbox() {
     }, 1000);
   };
 
-  const leftTabs = [
-    { id: 'plan', label: 'Plan', icon: <FileText size={14} /> },
-    { id: 'code', label: 'Code', icon: <Code size={14} /> },
-  ];
-
   return (
     <div className="flex flex-col h-screen bg-background">
       <SandboxHeader
@@ -195,21 +184,16 @@ export default function AgentSandbox() {
       <div className="flex-1 min-h-0">
         <ResizablePanelGroup direction="horizontal">
           {/* Left Panel - Plan & Code */}
-          <ResizablePanel defaultSize={30} minSize={10}>
-            <div className="flex flex-col h-full">
-              <TabBar
-                tabs={leftTabs}
-                activeTab={activeLeftTab}
-                onTabChange={(id) => setActiveLeftTab(id as 'plan' | 'code')}
-              />
-              <div className="flex-1 min-h-0">
-                {activeLeftTab === 'plan' ? (
-                  <PlanViewer content={mockPlan.content} />
-                ) : (
-                  <CodeViewer code={mockCode} />
-                )}
-              </div>
-            </div>
+          <ResizablePanel 
+            defaultSize={30} 
+            minSize={isLeftPanelCollapsed ? 3 : 20}
+            maxSize={isLeftPanelCollapsed ? 3 : 100}
+          >
+            <TabBar
+              planContent={mockPlan.content}
+              codeContent={mockCode}
+              onCollapseChange={setIsLeftPanelCollapsed}
+            />
           </ResizablePanel>
 
           <ResizableHandle withHandle />
