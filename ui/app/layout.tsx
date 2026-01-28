@@ -19,7 +19,7 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "Conscience",
-  description: "Collaborative agent development",
+  description: "Build AI agents with natural language",
 };
 
 export default function RootLayout({
