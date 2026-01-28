@@ -52,7 +52,7 @@ export default function TabBar({ planContent, codeContent, onCollapseChange }: T
         </div>
         <button
           onClick={handleToggleCollapse}
-          className="cursor-pointer flex items-center justify-center p-2 mr-1 text-muted-foreground hover:text-foreground hover:bg-muted/50 rounded transition-colors"
+          className="cursor-pointer flex items-center justify-center p-2 m-2 mr-1 text-muted-foreground hover:text-foreground hover:bg-muted/50 rounded transition-colors"
           title={isCollapsed ? "Expand panel" : "Collapse panel"}
         >
           {isCollapsed ? <PanelLeftOpen size={16} /> : <PanelLeftClose size={16} />}

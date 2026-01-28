@@ -29,7 +29,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Header } from "@/components/Header";
 import { MicButton } from "@/components/MicButton";
-import { getModels } from "../../actions/get_models";
+import { getModels } from "../../actions/get-models";
 import { approvePlan } from "../../actions/approve-plan";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";

@@ -126,6 +126,7 @@ export default function AgentSandbox() {
 
   // State
   const [isLeftPanelCollapsed, setIsLeftPanelCollapsed] = useState(false);
+  const [isRightPanelCollapsed, setIsRightPanelCollapsed] = useState(false);
   const [isRunning, setIsRunning] = useState(false);
   const [agent, setAgent] = useState<Agent>({ ...mockAgent, id: agentId });
   const [logs, setLogs] = useState(mockLogs);
@@ -218,8 +219,16 @@ export default function AgentSandbox() {
           <ResizableHandle withHandle />
 
           {/* Right Panel - Agent Chat */}
-          <ResizablePanel defaultSize={30} minSize={10}>
-            <ChatPanel messages={chatMessages} onSendMessage={handleSendMessage} />
+          <ResizablePanel 
+            defaultSize={30} 
+            minSize={isRightPanelCollapsed ? 3 : 20}
+            maxSize={isRightPanelCollapsed ? 3 : 100}
+          >
+            <ChatPanel 
+              messages={chatMessages} 
+              onSendMessage={handleSendMessage} 
+              onCollapseChange={setIsRightPanelCollapsed}
+            />
           </ResizablePanel>
         </ResizablePanelGroup>
       </div>
