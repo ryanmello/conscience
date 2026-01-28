@@ -111,7 +111,7 @@ async def approve_plan(
             user_id=UUID(user.id),
             plan_id=plan.id,
             name=request.title,
-            status="building"
+            status="initialized"
         )
         db.add(agent)
         db.commit()

@@ -25,7 +25,7 @@ class Agent(Base):
         nullable=False
     )
     name: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
-    status: Mapped[str] = mapped_column(String(50), default="building")
+    status: Mapped[str] = mapped_column(String(50), default="initialized")
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), 
         server_default=func.now()
