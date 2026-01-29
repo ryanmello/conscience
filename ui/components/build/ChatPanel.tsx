@@ -110,7 +110,7 @@ export default function ChatPanel({
     <div className="h-full flex flex-col bg-background">
       {/* Header */}
       <div className={cn(
-        "flex items-center border-b border-border bg-muted/20",
+        "flex items-center p-2 border-b border-border bg-muted/20 h-10",
         isCollapsed ? "justify-center" : "justify-between"
       )}>
         {!isCollapsed && (

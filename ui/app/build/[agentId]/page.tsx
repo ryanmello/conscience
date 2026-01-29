@@ -286,8 +286,8 @@ export default function AgentSandbox() {
           {/* Left Panel - Plan & Code */}
           <ResizablePanel 
             defaultSize={30} 
-            minSize={isLeftPanelCollapsed ? 3 : 20}
-            maxSize={isLeftPanelCollapsed ? 3 : 100}
+            minSize={isLeftPanelCollapsed ? 2 : 20}
+            maxSize={isLeftPanelCollapsed ? 2 : 100}
           >
             <TabBar
               planContent={mockPlan.content}
@@ -320,8 +320,8 @@ export default function AgentSandbox() {
           {/* Right Panel - Agent Chat */}
           <ResizablePanel 
             defaultSize={30} 
-            minSize={isRightPanelCollapsed ? 3 : 20}
-            maxSize={isRightPanelCollapsed ? 3 : 100}
+            minSize={isRightPanelCollapsed ? 2 : 20}
+            maxSize={isRightPanelCollapsed ? 2 : 100}
           >
             <ChatPanel 
               messages={chatMessages} 

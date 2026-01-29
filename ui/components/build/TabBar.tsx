@@ -39,7 +39,7 @@ export default function TabBar({
   return (
     <div className="flex flex-col h-full">
       {/* Tab Header */}
-      <div className="flex items-center justify-between border-b border-border bg-muted/20">
+      <div className="flex items-center justify-between border-b border-border bg-muted/20 min-h-10">
         <div className="flex">
           {!isCollapsed && tabs.map((tab) => (
             <button
@@ -59,7 +59,7 @@ export default function TabBar({
         </div>
         <button
           onClick={handleToggleCollapse}
-          className="cursor-pointer flex items-center justify-center p-2 m-2 mr-1 text-muted-foreground hover:text-foreground hover:bg-muted/50 rounded transition-colors"
+          className="cursor-pointer flex items-center justify-center p-2 mr-1 text-muted-foreground hover:text-foreground hover:bg-muted/50 rounded transition-colors"
           title={isCollapsed ? "Expand panel" : "Collapse panel"}
         >
           {isCollapsed ? <PanelLeftOpen size={16} /> : <PanelLeftClose size={16} />}
