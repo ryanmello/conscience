@@ -5,12 +5,14 @@ import { cn } from "@/lib/utils";
 import { PanelLeftClose, PanelLeftOpen, FileText, Code } from "lucide-react";
 import PlanViewer from "@/components/build/PlanViewer";
 import CodeViewer from "@/components/build/CodeViewer";
+import type { FileSystemNode } from "@/types/file-system";
 
 type Tab = 'plan' | 'code';
 
 interface TabBarProps {
   planContent: string;
-  codeContent: string;
+  files: FileSystemNode[];
+  onFileChange?: (path: string, content: string) => void;
   onCollapseChange?: (isCollapsed: boolean) => void;
 }
 
@@ -19,7 +21,12 @@ const tabs: { id: Tab; label: string; icon: React.ReactNode }[] = [
   { id: 'code', label: 'Code', icon: <Code size={14} /> },
 ];
 
-export default function TabBar({ planContent, codeContent, onCollapseChange }: TabBarProps) {
+export default function TabBar({ 
+  planContent, 
+  files, 
+  onFileChange,
+  onCollapseChange 
+}: TabBarProps) {
   const [activeTab, setActiveTab] = useState<Tab>('plan');
   const [isCollapsed, setIsCollapsed] = useState(false);
 
@@ -65,7 +72,7 @@ export default function TabBar({ planContent, codeContent, onCollapseChange }: T
           {activeTab === 'plan' ? (
             <PlanViewer content={planContent} />
           ) : (
-            <CodeViewer code={codeContent} />
+            <CodeViewer files={files} onFileChange={onFileChange} />
           )}
         </div>
       )}

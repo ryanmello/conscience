@@ -24,8 +24,8 @@ export default function ExecutionLogs() {
   };
 
   return (
-    <div className="h-full flex flex-col bg-[#1a1a1a]">
-      <div className="flex items-center gap-2 px-4 py-3 border-b border-border/50 bg-[#252525]">
+    <div className="h-full flex flex-col bg-background">
+      <div className="flex items-center gap-2 px-4 py-3 border-b border-border/50 bg-muted">
         <Terminal size={14} className="text-muted-foreground" />
         <span className="text-sm font-medium text-muted-foreground">
           Console Output
@@ -40,7 +40,7 @@ export default function ExecutionLogs() {
             >
               [{log.level.toUpperCase()}]
             </span>
-            <span className="text-[#d4d4d4]">{log.message}</span>
+            <span className="text-foreground">{log.message}</span>
           </div>
         ))}
         <div className="flex items-center gap-2 mt-2 text-muted-foreground/40">

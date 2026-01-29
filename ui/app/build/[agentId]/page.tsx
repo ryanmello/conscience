@@ -12,6 +12,7 @@ import ExecutionLogs, { mockLogs } from '@/components/build/ExecutionLogs';
 import SandboxHeader, { Agent, mockAgent } from '@/components/build/SandboxHeader';
 import TabBar from '@/components/build/TabBar';
 import AgentVisualizer from '@/components/build/AgentVisualizer';
+import type { FileSystemNode } from '@/types/file-system';
 
 const mockPlan = {
   title: 'Research Assistant Agent',
@@ -48,7 +49,13 @@ This agent will help users research topics by searching multiple sources and com
   version: 1,
 };
 
-const mockCode = `"""
+const mockFiles: FileSystemNode[] = [
+  {
+    name: 'agent.py',
+    path: 'agent.py',
+    type: 'file',
+    language: 'python',
+    content: `"""
 Research Assistant Agent
 Generated from approved plan
 """
@@ -56,26 +63,9 @@ Generated from approved plan
 import asyncio
 from typing import Optional
 from pydantic import BaseModel, Field
-
-class ResearchInput(BaseModel):
-    topic: str = Field(..., description="The topic to research")
-    depth: str = Field(default="moderate", description="Research depth")
-    sources: list[str] = Field(default_factory=list)
-
-class ResearchOutput(BaseModel):
-    summary: str
-    key_findings: list[str]
-    sources: list[dict]
-    confidence: float
-
-async def search_source(query: str, source: str) -> dict:
-    """Search a single source for information."""
-    # TODO: Implement actual search logic
-    await asyncio.sleep(0.5)  # Simulate API call
-    return {
-        "source": source,
-        "results": [f"Result from {source} for: {query}"]
-    }
+from models.input import ResearchInput
+from models.output import ResearchOutput
+from utils.helpers import search_source
 
 async def run(input: ResearchInput) -> ResearchOutput:
     """Main agent execution function."""
@@ -114,7 +104,116 @@ if __name__ == "__main__":
     test_input = ResearchInput(topic="artificial intelligence trends 2025")
     result = asyncio.run(run(test_input))
     print(f"\\nResult: {result.model_dump_json(indent=2)}")
-`;
+`,
+  },
+  {
+    name: 'models',
+    path: 'models',
+    type: 'folder',
+    children: [
+      {
+        name: 'input.py',
+        path: 'models/input.py',
+        type: 'file',
+        language: 'python',
+        content: `"""Input models for the Research Assistant Agent."""
+
+from pydantic import BaseModel, Field
+
+class ResearchInput(BaseModel):
+    """Input schema for research requests."""
+    topic: str = Field(..., description="The topic to research")
+    depth: str = Field(default="moderate", description="Research depth: quick, moderate, or deep")
+    sources: list[str] = Field(default_factory=list, description="Preferred sources to search")
+`,
+      },
+      {
+        name: 'output.py',
+        path: 'models/output.py',
+        type: 'file',
+        language: 'python',
+        content: `"""Output models for the Research Assistant Agent."""
+
+from pydantic import BaseModel
+
+class ResearchOutput(BaseModel):
+    """Output schema for research results."""
+    summary: str
+    key_findings: list[str]
+    sources: list[dict]
+    confidence: float
+`,
+      },
+    ],
+  },
+  {
+    name: 'utils',
+    path: 'utils',
+    type: 'folder',
+    children: [
+      {
+        name: 'helpers.py',
+        path: 'utils/helpers.py',
+        type: 'file',
+        language: 'python',
+        content: `"""Utility functions for the Research Assistant Agent."""
+
+import asyncio
+
+async def search_source(query: str, source: str) -> dict:
+    """Search a single source for information."""
+    # TODO: Implement actual search logic
+    await asyncio.sleep(0.5)  # Simulate API call
+    return {
+        "source": source,
+        "results": [f"Result from {source} for: {query}"]
+    }
+
+def format_citation(url: str, title: str) -> str:
+    """Format a citation for output."""
+    return f"[{title}]({url})"
+`,
+      },
+    ],
+  },
+  {
+    name: 'requirements.txt',
+    path: 'requirements.txt',
+    type: 'file',
+    language: 'plaintext',
+    content: `pydantic>=2.0.0
+asyncio
+aiohttp>=3.8.0
+`,
+  },
+  {
+    name: 'README.md',
+    path: 'README.md',
+    type: 'file',
+    language: 'markdown',
+    content: `# Research Assistant Agent
+
+A powerful research agent that searches multiple sources and compiles comprehensive summaries.
+
+## Usage
+
+\`\`\`python
+from agent import run
+from models.input import ResearchInput
+
+input = ResearchInput(topic="artificial intelligence", depth="deep")
+result = await run(input)
+print(result.summary)
+\`\`\`
+
+## Configuration
+
+- **Max sources**: 10
+- **Timeout**: 30 seconds per source
+- **Summary length**: Up to 2000 words
+`,
+  },
+];
 
 // ============================================================================
 // Main Component
@@ -192,7 +291,7 @@ export default function AgentSandbox() {
           >
             <TabBar
               planContent={mockPlan.content}
-              codeContent={mockCode}
+              files={mockFiles}
               onCollapseChange={setIsLeftPanelCollapsed}
             />
           </ResizablePanel>
