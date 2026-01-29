@@ -215,11 +215,7 @@ class PlanService:
         for question in questions:
             await websocket_service.send_message(session_id, {
                 "type": "question",
-                "question": question,
-                "progress": {
-                    "round": state["questions_asked"] + 1,
-                    "max_rounds": settings.MAX_FOLLOWUP_QUESTIONS
-                }
+                "question": question
             })
         
         logger.info(f"[{session_id}] Waiting for user response (interrupt)...")

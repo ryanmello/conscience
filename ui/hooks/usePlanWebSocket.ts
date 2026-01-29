@@ -17,17 +17,11 @@ export interface Question {
   text: string;
 }
 
-// Progress info from server
-export interface Progress {
-  round: number;
-  max_rounds: number;
-}
-
 // Chat message types - only user messages and grouped questions
 export type ChatMessage =
   | { type: "user_prompt"; content: string }
   | { type: "user_answer"; content: string }
-  | { type: "questions"; questions: Question[]; progress: Progress };
+  | { type: "questions"; questions: Question[] };
 
 // Thinking status (shown temporarily, not persisted in messages)
 export interface ThinkingStatus {
@@ -47,7 +41,6 @@ interface DocumentUpdateMessage {
 interface QuestionMessage {
   type: "question";
   question: Question;
-  progress: Progress;
 }
 
 interface StatusMessage {
@@ -80,25 +73,18 @@ export function usePlanWebSocket() {
   const [document, setDocument] = useState<PlanDocument | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [currentQuestions, setCurrentQuestions] = useState<Question[]>([]);
-  const [currentProgress, setCurrentProgress] = useState<Progress | null>(null);
   const [thinkingStatus, setThinkingStatus] = useState<ThinkingStatus | null>(null);
   const [isReadyForApproval, setIsReadyForApproval] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const wsRef = useRef<WebSocket | null>(null);
-  const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const pendingQuestionsRef = useRef<Question[]>([]);
-  const currentRoundRef = useRef<number>(0);
-  const answeredRoundsRef = useRef<Set<number>>(new Set());
 
   // Clean up on unmount
   useEffect(() => {
     return () => {
       if (wsRef.current) {
         wsRef.current.close();
-      }
-      if (reconnectTimeoutRef.current) {
-        clearTimeout(reconnectTimeoutRef.current);
       }
     };
   }, []);
@@ -110,14 +96,11 @@ export function usePlanWebSocket() {
     setDocument(null);
     setMessages([{ type: "user_prompt", content: prompt }]);
     setCurrentQuestions([]);
-    setCurrentProgress(null);
     setThinkingStatus(null);
     setIsReadyForApproval(false);
     setError(null);
     setConnectionState("connecting");
     pendingQuestionsRef.current = [];
-    currentRoundRef.current = 0;
-    answeredRoundsRef.current = new Set();
 
     // Get auth token
     const supabase = createClient();
@@ -185,33 +168,19 @@ export function usePlanWebSocket() {
         break;
 
       case "question": {
-        // Ignore questions from rounds we've already answered
-        if (answeredRoundsRef.current.has(data.progress.round)) {
-          console.log(`Ignoring duplicate questions from round ${data.progress.round}`);
-          break;
-        }
-
         // Clear thinking status when questions arrive
         setThinkingStatus(null);
         
-        // Check if this is a new round of questions
-        const isNewRound = data.progress.round !== currentRoundRef.current;
-        
-        if (isNewRound) {
-          // Start collecting questions for this new round
-          currentRoundRef.current = data.progress.round;
-          pendingQuestionsRef.current = [data.question];
-        } else {
-          // Same round - accumulate questions (avoid duplicates)
-          const exists = pendingQuestionsRef.current.some(q => q.id === data.question.id || q.text === data.question.text);
-          if (!exists) {
-            pendingQuestionsRef.current.push(data.question);
-          }
+        // Accumulate questions (avoid duplicates)
+        const exists = pendingQuestionsRef.current.some(
+          q => q.id === data.question.id || q.text === data.question.text
+        );
+        if (!exists) {
+          pendingQuestionsRef.current.push(data.question);
         }
         
-        // Update current questions and progress
+        // Update current questions
         setCurrentQuestions([...pendingQuestionsRef.current]);
-        setCurrentProgress(data.progress);
         break;
       }
 
@@ -224,7 +193,6 @@ export function usePlanWebSocket() {
         setThinkingStatus(null);
         setIsReadyForApproval(true);
         setCurrentQuestions([]);
-        setCurrentProgress(null);
         break;
 
       case "task.error":
@@ -245,23 +213,15 @@ export function usePlanWebSocket() {
       return;
     }
 
-    // Mark this round as answered to ignore any duplicate questions
-    if (currentProgress) {
-      answeredRoundsRef.current.add(currentProgress.round);
-    }
-
     // Add the questions and answer to messages as a group
-    if (currentProgress) {
-      setMessages(prev => [
-        ...prev,
-        { type: "questions", questions: [...currentQuestions], progress: currentProgress },
-        { type: "user_answer", content: response }
-      ]);
-    }
+    setMessages(prev => [
+      ...prev,
+      { type: "questions", questions: [...currentQuestions] },
+      { type: "user_answer", content: response }
+    ]);
 
-    // Clear current questions while waiting for next round
+    // Clear current questions while waiting for next batch
     setCurrentQuestions([]);
-    setCurrentProgress(null);
     pendingQuestionsRef.current = [];
 
     // Send to server
@@ -269,7 +229,7 @@ export function usePlanWebSocket() {
       type: "user_response",
       response: response
     }));
-  }, [currentQuestions, currentProgress]);
+  }, [currentQuestions]);
 
   // Disconnect WebSocket
   const disconnect = useCallback(() => {
@@ -287,13 +247,10 @@ export function usePlanWebSocket() {
     setDocument(null);
     setMessages([]);
     setCurrentQuestions([]);
-    setCurrentProgress(null);
     setThinkingStatus(null);
     setIsReadyForApproval(false);
     setError(null);
     pendingQuestionsRef.current = [];
-    currentRoundRef.current = 0;
-    answeredRoundsRef.current = new Set();
   }, [disconnect]);
 
   return {
@@ -303,7 +260,6 @@ export function usePlanWebSocket() {
     document,
     messages,
     currentQuestions,
-    currentProgress,
     thinkingStatus,
     isReadyForApproval,
     error,

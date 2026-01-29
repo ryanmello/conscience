@@ -106,7 +106,6 @@ export default function BuildPage() {
     document,
     messages,
     currentQuestions,
-    currentProgress,
     thinkingStatus,
     isReadyForApproval,
     error,
@@ -301,9 +300,6 @@ export default function BuildPage() {
                   {message.questions.length > 1 ? `${qIndex + 1}. ` : ""}{q.text}
                 </p>
               ))}
-              <p className="text-xs text-muted-foreground">
-                Round {message.progress.round} of {message.progress.max_rounds}
-              </p>
             </div>
           </div>
         </div>
@@ -367,7 +363,7 @@ export default function BuildPage() {
               )}
 
               {/* Current questions waiting for response */}
-              {hasCurrentQuestions && currentProgress && (
+              {hasCurrentQuestions && (
                 <div className="flex justify-start">
                   <div className="flex items-start gap-3 max-w-[80%]">
                     <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-green-500/20">
