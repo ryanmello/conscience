@@ -145,9 +145,6 @@ export default function ChatPanel({
                 <p className="text-sm text-muted-foreground">
                   Ask me to modify your agent
                 </p>
-                <p className="text-xs text-muted-foreground/60 mt-1">
-                  e.g. &quot;Add an input for max results&quot;
-                </p>
               </div>
             ) : (
               messages.map((message) => (

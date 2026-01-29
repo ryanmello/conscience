@@ -29,12 +29,15 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Header } from "@/components/Header";
 import { MicButton } from "@/components/MicButton";
+import { Skeleton } from "@/components/ui/skeleton";
 import { getModels } from "../../actions/get-models";
 import { approvePlan } from "../../actions/approve-plan";
+import { getAgents, AgentSummary } from "../../actions/get-agents";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { usePlanWebSocket, ChatMessage } from "@/hooks/usePlanWebSocket";
 import { useRouter } from "next/navigation";
+import { useEffect, useRef, useState } from "react";
 
 const examplePrompts = [
   {
@@ -64,34 +67,37 @@ const examplePrompts = [
 ];
 
 
-// Mock data for previous agents - will be replaced with real data from API
-const previousAgents = [
-  {
-    id: "1",
-    name: "Research Assistant",
-    description: "Searches and compiles information from multiple sources",
-    createdAt: "2 days ago",
-  },
-  {
-    id: "2",
-    name: "Data Formatter",
-    description: "Converts data between JSON, CSV, and XML formats",
-    createdAt: "1 week ago",
-  },
-];
+// Helper to format relative time
+function formatRelativeTime(dateString: string): string {
+  const date = new Date(dateString);
+  const now = new Date();
+  const diffMs = now.getTime() - date.getTime();
+  const diffMins = Math.floor(diffMs / (1000 * 60));
+  const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+  const diffWeeks = Math.floor(diffDays / 7);
+
+  if (diffMins < 1) return "Just now";
+  if (diffMins < 60) return `${diffMins} min ago`;
+  if (diffHours < 24) return `${diffHours} hour${diffHours > 1 ? "s" : ""} ago`;
+  if (diffDays < 7) return `${diffDays} day${diffDays > 1 ? "s" : ""} ago`;
+  return `${diffWeeks} week${diffWeeks > 1 ? "s" : ""} ago`;
+}
 
 
 export default function BuildPage() {
   const router = useRouter()
   
-  const [prompt, setPrompt] = React.useState("");
-  const [answerInput, setAnswerInput] = React.useState("");
-  const [models, setModels] = React.useState<string[] | null>(null);
-  const [selectedModel, setSelectedModel] = React.useState<string>("Opus 4.5");
-  const [isLoadingModels, setIsLoadingModels] = React.useState(false);
-  const [isDocumentExpanded, setIsDocumentExpanded] = React.useState(false);
-  const [isApproving, setIsApproving] = React.useState(false);
-  const chatEndRef = React.useRef<HTMLDivElement>(null);
+  const [prompt, setPrompt] = useState("");
+  const [answerInput, setAnswerInput] = useState("");
+  const [models, setModels] = useState<string[] | null>(null);
+  const [selectedModel, setSelectedModel] = useState<string>("Opus 4.5");
+  const [isLoadingModels, setIsLoadingModels] = useState(false);
+  const [isDocumentExpanded, setIsDocumentExpanded] = useState(false);
+  const [isApproving, setIsApproving] = useState(false);
+  const [agents, setAgents] = useState<AgentSummary[]>([]);
+  const [isLoadingAgents, setIsLoadingAgents] = useState(true);
+  const chatEndRef = useRef<HTMLDivElement>(null);
 
   // WebSocket hook
   const {
@@ -116,24 +122,44 @@ export default function BuildPage() {
   const hasCurrentQuestions = currentQuestions.length > 0;
 
   // Track animation phase: 'idle' -> 'fading-bottom' -> 'sliding' -> 'fading-top' -> 'complete'
-  const [animationPhase, setAnimationPhase] = React.useState<'idle' | 'fading-bottom' | 'sliding' | 'fading-top' | 'complete'>('idle');
+  const [animationPhase, setAnimationPhase] = useState<'idle' | 'fading-bottom' | 'sliding' | 'fading-top' | 'complete'>('idle');
 
   // Scroll to bottom when messages change
-  React.useEffect(() => {
+  useEffect(() => {
     if (chatEndRef.current) {
       chatEndRef.current.scrollIntoView({ behavior: "smooth" });
     }
   }, [messages, thinkingStatus, currentQuestions]);
 
   // Handle errors
-  React.useEffect(() => {
+  useEffect(() => {
     if (error) {
       toast.error(error);
     }
   }, [error]);
 
+  // Fetch agents on mount
+  useEffect(() => {
+    async function fetchAgents() {
+      setIsLoadingAgents(true);
+      try {
+        const result = await getAgents();
+        if (result.success && result.data) {
+          setAgents(result.data.agents);
+        } else {
+          console.error("Failed to fetch agents:", result.error);
+        }
+      } catch (err) {
+        console.error("Error fetching agents:", err);
+      } finally {
+        setIsLoadingAgents(false);
+      }
+    }
+    fetchAgents();
+  }, []);
+
   // Animation effect - triggers on typing OR entering chat mode
-  React.useEffect(() => {
+  useEffect(() => {
     if (isTyping || isChatMode) {
       // Phase 1: Fade out bottom sections (Try an example + Your agents)
       setAnimationPhase('fading-bottom');
@@ -562,9 +588,26 @@ export default function BuildPage() {
           <h2 className="mb-5 text-xl font-normal">
             Your <span className="text-green-500">agents</span>
           </h2>
-          {previousAgents.length > 0 ? (
+          {isLoadingAgents ? (
+            // Loading skeleton
             <div className="space-y-3">
-              {previousAgents.map((agent, index) => {
+              {[1, 2].map((i) => (
+                <div
+                  key={i}
+                  className="flex items-center gap-4 rounded-2xl border border-border bg-card p-4"
+                >
+                  <Skeleton className="h-12 w-12 shrink-0" />
+                  <div className="min-w-0 flex-1 space-y-2">
+                    <Skeleton className="h-5 w-40" />
+                    <Skeleton className="h-4 w-64" />
+                  </div>
+                  <Skeleton className="h-4 w-20" />
+                </div>
+              ))}
+            </div>
+          ) : agents.length > 0 ? (
+            <div className="space-y-3">
+              {agents.map((agent, index) => {
                 // Cycle through colors for visual interest
                 const colorVariants = [
                   { bg: "bg-blue-500/10", text: "text-blue-500" },
@@ -574,15 +617,11 @@ export default function BuildPage() {
                 ];
                 const colorVariant = colorVariants[index % colorVariants.length];
 
-
                 return (
                   <button
                     key={agent.id}
                     className="cursor-pointer group w-full text-left"
-                    onClick={() => {
-                      // TODO: Navigate to agent
-                      console.log("Open agent:", agent.id);
-                    }}
+                    onClick={() => router.push(`/build/${agent.id}`)}
                   >
                     <div className="flex items-center gap-4 rounded-2xl border border-border bg-card p-4 transition-all hover:shadow-md">
                       <div className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-xl ${colorVariant.bg}`}>
@@ -590,19 +629,19 @@ export default function BuildPage() {
                       </div>
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-2">
-                          <span className="font-medium">{agent.name}</span>
+                          <span className="font-medium">{agent.name || agent.plan.title}</span>
                           <ArrowRight
                             size={14}
                             className={`opacity-0 transition-opacity group-hover:opacity-100 ${colorVariant.text}`}
                           />
                         </div>
                         <p className="truncate text-sm text-muted-foreground">
-                          {agent.description}
+                          {agent.status}
                         </p>
                       </div>
                       <div className="flex shrink-0 items-center gap-1.5 text-xs text-muted-foreground">
                         <Clock size={14} />
-                        {agent.createdAt}
+                        {formatRelativeTime(agent.created_at)}
                       </div>
                     </div>
                   </button>
@@ -610,14 +649,11 @@ export default function BuildPage() {
               })}
             </div>
           ) : (
-            <div className="flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-border py-16 text-center">
+            <div className="flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-border py-8 text-center">
               <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-yellow-500/15">
                 <Bot size={32} className="text-yellow-500" />
               </div>
-              <p className="mb-1 text-lg font-medium">No agents yet</p>
-              <p className="text-sm text-muted-foreground">
-                Describe what you want to build above
-              </p>
+              <p className="text-lg font-medium">No agents yet</p>
             </div>
           )}
         </div>
