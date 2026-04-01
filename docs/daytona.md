@@ -2,7 +2,7 @@
 
 ## Overview
 
-[Daytona](https://www.daytona.io/) is an open-source infrastructure platform for running AI-generated code in isolated sandbox environments. It's highly applicable to our use case of executing Python agent code securely.
+[Daytona](https://www.daytona.io/) is an open-source infrastructure platform for running AI-generated code in isolated sandbox environments. We use it to execute multi-file agent projects that are generated and stored in our `agent_file` database table.
 
 **Key Value Proposition:** Instead of building our own sandboxing infrastructure (containers, security isolation, resource limits), Daytona provides this as a managed service with SDKs.
 
@@ -14,7 +14,8 @@
 |-----------------|------------------|
 | Execute Python code safely | Isolated sandbox environments per execution |
 | Stream logs in real-time | Log streaming API built-in |
-| Manage file system (agent code) | File system operations (upload/download) |
+| Manage file system (multi-file projects) | File system operations (upload/download) |
+| Install pip dependencies | Process execution (run arbitrary commands) |
 | Resource limits per agent | Configurable CPU, RAM, disk per sandbox |
 | Pay-per-use pricing | Usage-based billing (per-second) |
 | Fast startup times | Warm sandbox pools - millisecond launches |
@@ -59,35 +60,25 @@
 
 ---
 
-## Integration Approach
-
-### Option A: Backend Integration (Recommended)
-
-Our FastAPI backend calls Daytona's Python SDK to manage sandboxes.
+## Architecture
 
 ```
-┌─────────────┐     ┌─────────────┐     ┌─────────────┐
-│   Frontend  │────▶│   Backend   │────▶│   Daytona   │
-│  (Next.js)  │     │  (FastAPI)  │     │  Sandboxes  │
-└─────────────┘     └─────────────┘     └─────────────┘
-     │                    │                    │
-     │ WebSocket          │ Python SDK         │ Isolated
-     │ (logs/status)      │ (create/execute)   │ Execution
+┌─────────────┐     ┌─────────────┐     ┌──────────────┐     ┌─────────────┐
+│   Frontend  │────▶│   Backend   │────▶│   Database   │     │   Daytona   │
+│  (Next.js)  │     │  (FastAPI)  │     │  (Supabase)  │     │  Sandboxes  │
+└─────────────┘     └─────────────┘     └──────────────┘     └─────────────┘
+     │                    │                    │                    │
+     │ WebSocket          │ 1. Read files      │ agent_file table  │
+     │ (logs/status)      │    from DB ────────┘                   │
+     │                    │                                        │
+     │                    │ 2. Create sandbox ─────────────────────┘
+     │                    │ 3. Sync files to sandbox FS            │
+     │                    │ 4. pip install dependencies             │
+     │                    │ 5. Execute entry point                  │
+     │◀───────────────────│ 6. Stream logs back ◀──────────────────│
 ```
 
-**Flow:**
-1. User clicks "Start Building" in sandbox UI
-2. Frontend sends request to backend via WebSocket
-3. Backend creates Daytona sandbox, uploads agent code
-4. Backend executes code, streams logs back to frontend
-5. Backend cleans up sandbox when done
-
-### Option B: Direct Frontend Integration
-
-Use Daytona's TypeScript SDK directly from the frontend (Next.js server actions).
-
-**Pros:** Simpler architecture, fewer hops
-**Cons:** API key management, less control over execution
+**The database is the source of truth.** Daytona sandboxes are ephemeral runtime environments. Files are synced from `agent_file` rows into the sandbox before each execution.
 
 ---
 
@@ -104,89 +95,101 @@ pip install daytona
 ```python
 from daytona import Daytona, DaytonaConfig, CreateSandboxFromSnapshotParams
 from typing import Callable, Optional
-import os
+from sqlalchemy.orm import Session
+
+from models.agent_file import AgentFile
+from config.settings import settings
+from utils.logger import get_logger
+
+logger = get_logger(__name__)
 
 class DaytonaService:
-    """Service for managing Daytona sandboxes for agent execution."""
-    
+    """Service for managing Daytona sandboxes for multi-file agent execution."""
+
     def __init__(self):
         self.config = DaytonaConfig(
-            api_key=os.getenv("DAYTONA_API_KEY")
+            api_key=settings.DAYTONA_API_KEY
         )
         self.client = Daytona(self.config)
-    
+
     def create_sandbox(
-        self, 
+        self,
         agent_id: str,
+        env_vars: Optional[dict[str, str]] = None,
         auto_stop_minutes: int = 15
     ) -> str:
-        """Create a new sandbox for an agent."""
+        """Create a new sandbox for an agent with optional environment variables."""
         params = CreateSandboxFromSnapshotParams(
             language="python",
             name=f"agent-{agent_id}",
             auto_stop_interval=auto_stop_minutes,
+            env_vars=env_vars or {},
             labels={"agent_id": agent_id}
         )
         sandbox = self.client.create(params)
         return sandbox.id
-    
-    def execute_code(
+
+    def sync_files_to_sandbox(
         self,
         sandbox_id: str,
-        code: str,
+        db: Session,
+        agent_id: str
+    ):
+        """
+        Sync all files from agent_file table to the sandbox filesystem.
+        Preserves directory structure (e.g. src/utils/helpers.py).
+        """
+        sandbox = self.client.find_one(sandbox_id)
+        files = db.query(AgentFile).filter(AgentFile.agent_id == agent_id).all()
+
+        for f in files:
+            sandbox.fs.upload_file(
+                path=f"/home/daytona/{f.path}",
+                content=f.content.encode()
+            )
+
+        logger.info(f"Synced {len(files)} files to sandbox {sandbox_id}")
+
+    def install_dependencies(self, sandbox_id: str):
+        """Install Python dependencies if requirements.txt exists."""
+        sandbox = self.client.find_one(sandbox_id)
+        try:
+            sandbox.process.exec("pip install -r /home/daytona/requirements.txt")
+            logger.info(f"Dependencies installed in sandbox {sandbox_id}")
+        except Exception as e:
+            logger.warning(f"Dependency install failed (may not have requirements.txt): {e}")
+
+    def execute_agent(
+        self,
+        sandbox_id: str,
+        entry_point: str = "main.py",
         on_stdout: Optional[Callable] = None,
-        on_stderr: Optional[Callable] = None,
-        timeout: int = 300  # 5 minutes default
+        on_stderr: Optional[Callable] = None
     ):
-        """Execute Python code in a sandbox."""
-        sandbox = self.client.find_one(sandbox_id)
-        
-        # For stateful execution (variables persist)
-        response = sandbox.code_interpreter.run_code(
-            code,
-            on_stdout=on_stdout,
-            on_stderr=on_stderr,
-            timeout=timeout
-        )
-        
-        return {
-            "exit_code": response.exit_code,
-            "result": response.result
-        }
-    
-    def upload_agent_code(
-        self,
-        sandbox_id: str,
-        code: str,
-        filename: str = "agent.py"
-    ):
-        """Upload agent code to sandbox filesystem."""
-        sandbox = self.client.find_one(sandbox_id)
-        sandbox.fs.upload_file(
-            path=f"/home/daytona/{filename}",
-            content=code.encode()
-        )
-    
-    def run_agent(
-        self,
-        sandbox_id: str,
-        on_stdout: Optional[Callable] = None
-    ):
-        """Run the uploaded agent code."""
+        """Run the agent's entry point script."""
         sandbox = self.client.find_one(sandbox_id)
         response = sandbox.process.exec(
-            "python /home/daytona/agent.py",
-            on_stdout=on_stdout
+            f"python /home/daytona/{entry_point}",
+            on_stdout=on_stdout,
+            on_stderr=on_stderr
         )
         return response
-    
+
     def cleanup_sandbox(self, sandbox_id: str):
         """Delete a sandbox after execution."""
-        sandbox = self.client.find_one(sandbox_id)
-        sandbox.delete()
+        try:
+            sandbox = self.client.find_one(sandbox_id)
+            sandbox.delete()
+            logger.info(f"Sandbox {sandbox_id} cleaned up")
+        except Exception as e:
+            logger.error(f"Failed to cleanup sandbox {sandbox_id}: {e}")
 ```
 
-### API Endpoint: `api/agent.py`
+---
+
+## API Endpoint: `api/agent.py`
+
+### Execution Endpoint
 
 ```python
 @router.post("/{agent_id}/execute")
@@ -196,27 +199,41 @@ async def execute_agent(
     db: Session = Depends(get_db)
 ):
     """Execute an agent's code in a Daytona sandbox."""
-    # Get agent and its code
-    agent = db.query(Agent).filter(Agent.id == agent_id).first()
+    agent = db.query(Agent).filter(
+        Agent.id == agent_id,
+        Agent.user_id == UUID(user.id)
+    ).first()
     if not agent:
         raise HTTPException(404, "Agent not found")
-    
-    # Create sandbox
+
+    # Check that files exist
+    file_count = db.query(AgentFile).filter(AgentFile.agent_id == agent_id).count()
+    if file_count == 0:
+        raise HTTPException(400, "No generated files to execute")
+
+    # TODO: Load user secrets from a secrets table
+    env_vars = {}
+
     daytona_service = DaytonaService()
-    sandbox_id = daytona_service.create_sandbox(agent_id)
-    
+    sandbox_id = daytona_service.create_sandbox(agent_id, env_vars=env_vars)
+
     try:
-        # Upload and execute code
-        daytona_service.upload_agent_code(sandbox_id, agent.code)
-        result = daytona_service.run_agent(sandbox_id)
-        
+        # Sync all files from DB to sandbox
+        daytona_service.sync_files_to_sandbox(sandbox_id, db, agent_id)
+
+        # Install dependencies
+        daytona_service.install_dependencies(sandbox_id)
+
+        # Execute entry point (from agent metadata, default to main.py)
+        entry_point = agent.entry_point or "main.py"
+        result = daytona_service.execute_agent(sandbox_id, entry_point=entry_point)
+
         return {
             "success": True,
             "exit_code": result.exit_code,
             "output": result.result
         }
     finally:
-        # Cleanup
         daytona_service.cleanup_sandbox(sandbox_id)
 ```
 
@@ -224,44 +241,159 @@ async def execute_agent(
 
 ## WebSocket Log Streaming
 
-For real-time log streaming to the frontend:
+For real-time log streaming to the frontend during execution:
 
 ```python
-# In WebSocket handler
-async def stream_execution(websocket, agent_id: str, code: str):
+import asyncio
+
+async def stream_execution(websocket, agent_id: str, db: Session, user_id: str):
+    """Stream agent execution logs to the frontend via WebSocket."""
+    agent = db.query(Agent).filter(
+        Agent.id == agent_id,
+        Agent.user_id == UUID(user_id)
+    ).first()
+
+    if not agent:
+        await websocket.send_json({"type": "error", "message": "Agent not found"})
+        return
+
+    # TODO: Load user secrets
+    env_vars = {}
+
     daytona_service = DaytonaService()
-    sandbox_id = daytona_service.create_sandbox(agent_id)
-    
+    sandbox_id = daytona_service.create_sandbox(agent_id, env_vars=env_vars)
+
     def on_stdout(message):
         asyncio.create_task(websocket.send_json({
             "type": "log",
             "stream": "stdout",
             "content": message.output
         }))
-    
+
     def on_stderr(message):
         asyncio.create_task(websocket.send_json({
-            "type": "log", 
+            "type": "log",
             "stream": "stderr",
             "content": message.output
         }))
-    
+
     try:
-        result = daytona_service.execute_code(
+        await websocket.send_json({"type": "status", "status": "syncing_files"})
+
+        # Sync files from DB
+        daytona_service.sync_files_to_sandbox(sandbox_id, db, agent_id)
+
+        await websocket.send_json({"type": "status", "status": "installing_dependencies"})
+
+        # Install deps
+        daytona_service.install_dependencies(sandbox_id)
+
+        await websocket.send_json({"type": "status", "status": "executing"})
+
+        # Execute with log streaming
+        entry_point = agent.entry_point or "main.py"
+        result = daytona_service.execute_agent(
             sandbox_id,
-            code,
+            entry_point=entry_point,
             on_stdout=on_stdout,
             on_stderr=on_stderr
         )
-        
+
         await websocket.send_json({
             "type": "execution_complete",
-            "exit_code": result["exit_code"],
-            "result": result["result"]
+            "exit_code": result.exit_code,
+            "result": result.result
+        })
+    except Exception as e:
+        await websocket.send_json({
+            "type": "error",
+            "message": str(e)
         })
     finally:
         daytona_service.cleanup_sandbox(sandbox_id)
 ```
+
+---
+
+## Sandbox Lifecycle Strategies
+
+### Ephemeral (Recommended for V1)
+
+Create a fresh sandbox for each execution. Destroy it when finished.
+
+- **Pros:** Simple, no state to manage, no lingering costs
+- **Cons:** Cold start on every run (mitigated by Daytona's warm pools), re-install deps each time
+- **Implementation:** Create in execution endpoint, destroy in `finally` block
+
+### Persistent (Better UX, V2)
+
+Keep the sandbox alive while the user is on the `/build/[agentId]` page. Re-use it across multiple runs.
+
+- **Pros:** No cold start on re-runs, no re-installing deps, faster iteration
+- **Cons:** Need to track sandbox ID, handle cleanup on disconnect, ongoing costs
+- **Implementation:**
+  - Store `sandbox_id` on the agent record or in a `sandbox_session` table
+  - On re-run, only sync files that changed (compare `updated_at` timestamps)
+  - Use Daytona's `auto_stop_interval` (e.g., 15 min inactivity) as a safety net
+  - Clean up on WebSocket disconnect
+
+### Agent Table Changes for Persistent Sandboxes
+
+```sql
+ALTER TABLE agent ADD COLUMN entry_point VARCHAR(500) DEFAULT 'main.py';
+ALTER TABLE agent ADD COLUMN sandbox_id VARCHAR(200);
+ALTER TABLE agent ADD COLUMN sandbox_active BOOLEAN DEFAULT false;
+```
+
+---
+
+## Secrets / Environment Variables
+
+Agents that call external APIs (OpenAI, Twilio, databases, etc.) need API keys injected into the sandbox.
+
+### Storage
+
+Store encrypted secrets per agent in the database:
+
+```sql
+CREATE TABLE agent_secret (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    agent_id UUID NOT NULL REFERENCES agent(id) ON DELETE CASCADE,
+    key VARCHAR(200) NOT NULL,       -- e.g. "OPENAI_API_KEY"
+    encrypted_value TEXT NOT NULL,    -- encrypted at rest
+    created_at TIMESTAMPTZ DEFAULT now(),
+    UNIQUE(agent_id, key)
+);
+```
+
+### Injection
+
+Load secrets at sandbox creation time:
+
+```python
+secrets = db.query(AgentSecret).filter(AgentSecret.agent_id == agent_id).all()
+env_vars = {s.key: decrypt(s.encrypted_value) for s in secrets}
+sandbox_id = daytona_service.create_sandbox(agent_id, env_vars=env_vars)
+```
+
+### Frontend
+
+A settings UI on the `/build/[agentId]` page where users add key-value pairs for environment variables. Values are encrypted before storage and never sent back to the frontend.
+
+---
+
+## Comparison: Daytona vs Self-Hosted
+
+| Aspect | Daytona | Self-Hosted (Docker) |
+|--------|---------|---------------------|
+| Setup time | Minutes | Days/weeks |
+| Security isolation | Managed | Your responsibility |
+| Scaling | Automatic | Manual infrastructure |
+| Cost | Pay-per-use | Fixed server costs |
+| Maintenance | None | Ongoing |
+| Cold start | Milliseconds (warm pools) | Seconds (container pull) |
+
+**Recommendation:** Start with Daytona for faster development. Consider self-hosted later if costs become significant at scale.
 
 ---
 
@@ -282,41 +414,25 @@ DAYTONA_API_KEY=your_api_key_here
 
 ---
 
-## Comparison: Daytona vs Self-Hosted
+## Implementation Checklist
 
-| Aspect | Daytona | Self-Hosted (Docker) |
-|--------|---------|---------------------|
-| Setup time | Minutes | Days/weeks |
-| Security isolation | Managed | Your responsibility |
-| Scaling | Automatic | Manual infrastructure |
-| Cost | Pay-per-use | Fixed server costs |
-| Maintenance | None | Ongoing |
-| Cold start | Milliseconds (warm pools) | Seconds (container pull) |
+- [ ] Sign up for Daytona account and get API key
+- [ ] Add `DAYTONA_API_KEY` to `.env` and `config/settings.py`
+- [ ] Install `daytona` Python package
+- [ ] Add `entry_point` column to agent table (migration)
+- [ ] Create `services/daytona_service.py` (multi-file sync version)
+- [ ] Add `/api/agent/{id}/execute` endpoint
+- [ ] Add WebSocket endpoint for log streaming
+- [ ] Wire frontend Run/Stop buttons to execution endpoints
+- [ ] Create `hooks/useSandboxWebSocket.ts`
+- [ ] Stream logs to ExecutionLogs component
 
-**Recommendation:** Start with Daytona for faster development. Consider self-hosted later if costs become significant at scale.
-
----
-
-## Integration with Sandbox UI
-
-The sandbox UI can integrate Daytona as follows:
-
-1. **Start Building Button** → Creates Daytona sandbox
-2. **Code Editor (left panel)** → Code synced to sandbox filesystem
-3. **Execution Logs (right panel)** → Streamed from Daytona
-4. **Agent Visualizer** → Shows execution state from Daytona callbacks
-
----
-
-## Next Steps
-
-1. [ ] Sign up for Daytona account and get API key
-2. [ ] Add `DAYTONA_API_KEY` to environment variables
-3. [ ] Install `daytona` Python package
-4. [ ] Create `services/daytona_service.py`
-5. [ ] Update `api/agent.py` with execute endpoint
-6. [ ] Create WebSocket endpoint for log streaming
-7. [ ] Connect frontend sandbox UI to execution endpoints
+### Future (V2)
+- [ ] Persistent sandbox sessions (sandbox_id tracking)
+- [ ] Secrets management table + encryption
+- [ ] Secrets UI on build page
+- [ ] Incremental file sync (only changed files)
+- [ ] Network egress rules for security
 
 ---
 

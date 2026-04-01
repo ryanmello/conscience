@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams } from 'next/navigation';
 import { Loader2 } from 'lucide-react';
 import {
@@ -10,16 +10,58 @@ import {
 } from '@/components/ui/resizable';
 import ChatPanel, { ChatMessage } from '@/components/build/ChatPanel';
 import ExecutionLogs from '@/components/build/ExecutionLogs';
-import SandboxHeader, { Agent } from '@/components/build/SandboxHeader';
+import SandboxHeader from '@/components/build/SandboxHeader';
+import type { Agent, AgentStatus } from '@/components/build/SandboxHeader';
 import TabBar from '@/components/build/TabBar';
 import AgentVisualizer from '@/components/build/AgentVisualizer';
 import AgentNotFound from '@/components/build/AgentNotFound';
 import { getAgent, AgentWithPlan, AgentErrorCode } from '@/actions/get-agent';
-import type { FileSystemNode } from '@/types/file-system';
+import { getAgentFiles, saveAgentFile } from '@/actions/agent-files';
+import { useCodeGenWebSocket } from '@/hooks/useCodeGenWebSocket';
+import type { GeneratedFile } from '@/hooks/useCodeGenWebSocket';
+import type { FileSystemNode, FileNode, FolderNode } from '@/types/file-system';
+import { getLanguageFromExtension } from '@/types/file-system';
 
-// ============================================================================
-// Main Component
-// ============================================================================
+/**
+ * Convert a flat list of generated files into a nested FileSystemNode tree.
+ * e.g. [{path:"src/utils/helpers.py", ...}] -> folder "src" > folder "utils" > file "helpers.py"
+ */
+function buildFileTree(flatFiles: GeneratedFile[]): FileSystemNode[] {
+  const root: FolderNode = { name: '', path: '', type: 'folder', children: [] };
+
+  for (const f of flatFiles) {
+    const parts = f.path.split('/');
+    let current = root;
+
+    for (let i = 0; i < parts.length; i++) {
+      const part = parts[i];
+      const isLast = i === parts.length - 1;
+      const currentPath = parts.slice(0, i + 1).join('/');
+
+      if (isLast) {
+        const fileNode: FileNode = {
+          name: part,
+          path: currentPath,
+          type: 'file',
+          content: f.content,
+          language: f.language || getLanguageFromExtension(part),
+        };
+        current.children.push(fileNode);
+      } else {
+        let folder = current.children.find(
+          (c): c is FolderNode => c.type === 'folder' && c.name === part
+        );
+        if (!folder) {
+          folder = { name: part, path: currentPath, type: 'folder', children: [] };
+          current.children.push(folder);
+        }
+        current = folder;
+      }
+    }
+  }
+
+  return root.children;
+}
 
 export default function AgentSandbox() {
   const params = useParams();
@@ -35,7 +77,20 @@ export default function AgentSandbox() {
   const [isRightPanelCollapsed, setIsRightPanelCollapsed] = useState(false);
   const [isRunning, setIsRunning] = useState(false);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
-  const [files, setFiles] = useState<FileSystemNode[]>([]);
+  const [localFiles, setLocalFiles] = useState<GeneratedFile[]>([]);
+  const [agentStatus, setAgentStatus] = useState<AgentStatus>('initialized');
+
+  // Code generation WebSocket
+  const {
+    codeGenStatus,
+    files: codeGenFiles,
+    progress: codeGenProgress,
+    error: codeGenError,
+    startCodeGen,
+  } = useCodeGenWebSocket();
+
+  // Debounce timer for file saves
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Fetch agent data on mount
   useEffect(() => {
@@ -47,6 +102,21 @@ export default function AgentSandbox() {
 
       if (result.success && result.data) {
         setAgentData(result.data);
+        setAgentStatus(result.data.status as AgentStatus);
+
+        // If the agent already has generated files, load them
+        if (result.data.status !== 'initialized') {
+          const filesResult = await getAgentFiles(agentId);
+          if (filesResult.success && filesResult.files) {
+            setLocalFiles(
+              filesResult.files.map((f) => ({
+                path: f.path,
+                content: f.content,
+                language: f.language,
+              }))
+            );
+          }
+        }
       } else {
         setError({
           message: result.error || 'Failed to load agent',
@@ -60,17 +130,42 @@ export default function AgentSandbox() {
     fetchAgent();
   }, [agentId]);
 
-  // Derive agent for header from fetched data
+  // Sync code gen files into local files state as they stream in
+  useEffect(() => {
+    if (codeGenFiles.length > 0) {
+      setLocalFiles(codeGenFiles);
+    }
+  }, [codeGenFiles]);
+
+  // Update agent status based on code gen progress
+  useEffect(() => {
+    if (codeGenStatus === 'complete') {
+      setAgentStatus('generated');
+    } else if (codeGenStatus === 'error') {
+      setAgentStatus('error');
+    } else if (codeGenStatus !== 'idle') {
+      setAgentStatus('generating');
+    }
+  }, [codeGenStatus]);
+
+  // Build file tree from flat file list
+  const fileTree: FileSystemNode[] = buildFileTree(localFiles);
+
+  // Derive agent for header
   const agent: Agent | null = agentData
     ? {
         id: agentData.id,
         name: agentData.name || agentData.plan.title,
-        status: agentData.status as Agent['status'],
+        status: agentStatus,
         createdAt: agentData.created_at,
       }
     : null;
 
   // Handlers
+  const handleGenerateCode = useCallback(() => {
+    startCodeGen(agentId);
+  }, [agentId, startCodeGen]);
+
   const handleStart = () => {
     setIsRunning(true);
   };
@@ -79,8 +174,25 @@ export default function AgentSandbox() {
     setIsRunning(false);
   };
 
+  const handleFileChange = useCallback(
+    (path: string, content: string) => {
+      // Update local state immediately
+      setLocalFiles((prev) =>
+        prev.map((f) => (f.path === path ? { ...f, content } : f))
+      );
+
+      // Debounce the save to the backend
+      if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+      saveTimerRef.current = setTimeout(() => {
+        saveAgentFile(agentId, path, content).catch((e) =>
+          console.error('Failed to save file:', e)
+        );
+      }, 1000);
+    },
+    [agentId]
+  );
+
   const handleSendMessage = (content: string) => {
-    // Add user message
     const userMessage: ChatMessage = {
       id: Date.now().toString(),
       role: 'user',
@@ -89,12 +201,12 @@ export default function AgentSandbox() {
     };
     setChatMessages((prev) => [...prev, userMessage]);
 
-    // TODO: In real implementation, this would call the backend
+    // TODO: Wire to code modification backend in Phase 3
     setTimeout(() => {
       const assistantMessage: ChatMessage = {
         id: (Date.now() + 1).toString(),
         role: 'assistant',
-        content: `I understand you want to "${content}". I'm processing this request and will update the agent code accordingly.`,
+        content: `I understand you want to "${content}". This will be implemented in Phase 3.`,
         timestamp: new Date().toLocaleTimeString(),
       };
       setChatMessages((prev) => [...prev, assistantMessage]);
@@ -122,21 +234,31 @@ export default function AgentSandbox() {
       <SandboxHeader
         agent={agent}
         isRunning={isRunning}
+        codeGenStatus={codeGenStatus}
+        codeGenProgress={codeGenProgress}
+        onGenerateCode={handleGenerateCode}
         onStart={handleStart}
         onStop={handleStop}
       />
 
+      {codeGenError && (
+        <div className="px-5 py-2 text-sm text-red-400 bg-red-500/10 border-b border-red-500/20">
+          Code generation error: {codeGenError}
+        </div>
+      )}
+
       <div className="flex-1 min-h-0">
         <ResizablePanelGroup direction="horizontal">
           {/* Left Panel - Plan & Code */}
-          <ResizablePanel 
-            defaultSize={30} 
+          <ResizablePanel
+            defaultSize={30}
             minSize={isLeftPanelCollapsed ? 2 : 20}
             maxSize={isLeftPanelCollapsed ? 2 : 100}
           >
             <TabBar
               planContent={agentData.plan.content}
-              files={files}
+              files={fileTree}
+              onFileChange={handleFileChange}
               onCollapseChange={setIsLeftPanelCollapsed}
             />
           </ResizablePanel>
@@ -146,14 +268,12 @@ export default function AgentSandbox() {
           {/* Middle Panel - Canvas & Terminal */}
           <ResizablePanel defaultSize={40} minSize={25}>
             <ResizablePanelGroup direction="vertical">
-              {/* Agent Visualizer / Canvas */}
               <ResizablePanel defaultSize={80} minSize={40}>
                 <AgentVisualizer />
               </ResizablePanel>
 
               <ResizableHandle />
 
-              {/* Execution Logs / Terminal */}
               <ResizablePanel defaultSize={20} minSize={10}>
                 <ExecutionLogs />
               </ResizablePanel>
@@ -163,14 +283,14 @@ export default function AgentSandbox() {
           <ResizableHandle withHandle />
 
           {/* Right Panel - Agent Chat */}
-          <ResizablePanel 
-            defaultSize={30} 
+          <ResizablePanel
+            defaultSize={30}
             minSize={isRightPanelCollapsed ? 2 : 20}
             maxSize={isRightPanelCollapsed ? 2 : 100}
           >
-            <ChatPanel 
-              messages={chatMessages} 
-              onSendMessage={handleSendMessage} 
+            <ChatPanel
+              messages={chatMessages}
+              onSendMessage={handleSendMessage}
               onCollapseChange={setIsRightPanelCollapsed}
             />
           </ResizablePanel>

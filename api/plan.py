@@ -117,6 +117,8 @@ async def approve_plan(
         db.commit()
         
         logger.info(f"Plan {plan.id} and Agent {agent.id} created for user {user.id}")
+
+        # do something here
         
         return ApprovePlanResponse(
             success=True,

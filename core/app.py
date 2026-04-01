@@ -36,7 +36,7 @@ def create_app() -> FastAPI:
 #         raise ValueError("SUPABASE_DATABASE_URL is required but not set in environment variables")
 
 async def shutdown_event():
-    for task_id in List[str](websocket_service.active_connections.keys()):
+    for task_id in list(websocket_service.active_connections.keys()):
         await websocket_service.disconnect_websocket(task_id)
     logger.info("Shutdown complete")
     
