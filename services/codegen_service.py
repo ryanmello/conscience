@@ -245,7 +245,9 @@ class CodeGenService:
                 "type": "codegen.file_complete",
                 "path": file_path,
                 "content": content,
-                "language": file_entry.get("language", "python")
+                "language": file_entry.get("language", "python"),
+                "index": idx,
+                "total": total,
             })
 
             logger.info(f"[{session_id}] File complete: {file_path} ({len(content)} chars)")

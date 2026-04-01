@@ -86,6 +86,7 @@ export default function AgentSandbox() {
     files: codeGenFiles,
     progress: codeGenProgress,
     error: codeGenError,
+    logs: codeGenLogs,
     startCodeGen,
   } = useCodeGenWebSocket();
 
@@ -275,7 +276,10 @@ export default function AgentSandbox() {
               <ResizableHandle />
 
               <ResizablePanel defaultSize={20} minSize={10}>
-                <ExecutionLogs />
+                <ExecutionLogs
+                  logs={codeGenLogs}
+                  isActive={codeGenStatus !== 'idle' && codeGenStatus !== 'complete' && codeGenStatus !== 'error'}
+                />
               </ResizablePanel>
             </ResizablePanelGroup>
           </ResizablePanel>
