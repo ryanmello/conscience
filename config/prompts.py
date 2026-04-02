@@ -241,8 +241,8 @@ Rules:
 - Do NOT write docstrings or inline comments.
 """
 
-CODEGEN_VALIDATE_PROMPT = """You are a code review assistant. Review the following set of 
-generated files for an AI agent project and check for inter-file consistency.
+CODEGEN_VALIDATE_PROMPT = """You are a strict code validator. Review the following generated files
+for an AI agent project. Report ONLY issues that would cause a runtime crash or incorrect behavior.
 
 ## Agent Plan
 {plan_content}
@@ -250,12 +250,29 @@ generated files for an AI agent project and check for inter-file consistency.
 ## Generated Files
 {files}
 
-## Checks
-1. All imports between files resolve correctly (no missing modules).
-2. Function signatures match across call sites.
-3. The entry point (`{entry_point}`) can actually run the agent end-to-end.
-4. `requirements.txt` includes every third-party package used in the code.
-5. No placeholder or stub code remains (no `pass` or `...` in function bodies).
+## Entry Point
+{entry_point}
+
+## Report ONLY these categories of issues:
+1. **ImportError**: A file imports a name from another project file that does not exist (wrong
+   function name, wrong module name, wrong class name). Standard library and pip packages are fine.
+2. **AttributeError/KeyError**: Code accesses a dict key or object attribute that the producing
+   file never creates (e.g., file A returns {{"id": ...}} but file B reads result["email_id"]).
+3. **TypeError**: A function is called with the wrong number or type of arguments compared to
+   its definition in another project file.
+4. **Missing dependency**: A third-party pip package is imported but NOT listed in requirements.txt.
+5. **Dead code path**: The entry point ({entry_point}) cannot actually run end-to-end because a
+   required function or class is missing or unreachable.
+
+## Do NOT report:
+- Style preferences or alternative import patterns (e.g., `from x import y` vs `import x`)
+- Missing error handling, logging, or defensive coding
+- Design opinions about how data should be structured
+- Suggestions for improvement or best practices
+- Issues with standard library usage
+- Hypothetical edge cases that "might" fail
+
+Be CONSERVATIVE. When in doubt, do NOT report it. Only flag things you are certain would crash.
 
 Respond in JSON:
 {{
@@ -265,7 +282,41 @@ Respond in JSON:
   ]
 }}
 
-If everything looks correct, return {{"valid": true, "issues": []}}.
+If nothing would crash, return {{"valid": true, "issues": []}}.
+"""
+
+CODEGEN_FIX_BATCH_PROMPT = """You are a code fix assistant. Multiple generated files have cross-file
+consistency issues. You must fix ALL affected files in a single coordinated pass to ensure they
+are mutually consistent.
+
+## Skeleton Contract (source of truth for all signatures and types)
+{skeleton}
+
+## Files to Fix (current content)
+{files_to_fix}
+
+## Issues Found
+{issues}
+
+## Other Project Files (for context — do NOT include these in your response)
+{other_files}
+
+## Instructions
+- Fix ALL listed issues across ALL affected files in one coordinated pass.
+- The skeleton contract is the absolute source of truth for function signatures, class names,
+  and import paths. When in doubt, match the skeleton.
+- When fixing data structure mismatches between files, pick ONE consistent structure that
+  matches the skeleton and apply it to every file that touches that data.
+- Ensure imports, parameter names, return types, and dict key names match exactly across files.
+- Keep code concise — no docstrings, comments, or extra logic beyond what's needed.
+- Return EVERY file listed in "Files to Fix" even if only one line changed.
+
+Respond in JSON:
+{{
+  "fixed_files": [
+    {{"path": "file_path", "content": "full corrected file content", "language": "python"}}
+  ]
+}}
 """
 
 CODEGEN_MODIFY_FILES_PROMPT = """You are a code modification assistant. The user wants to make 

@@ -13,6 +13,7 @@ from config.prompts import (
     CODEGEN_SKELETON_PROMPT,
     CODEGEN_IMPLEMENT_FILE_PROMPT,
     CODEGEN_VALIDATE_PROMPT,
+    CODEGEN_FIX_BATCH_PROMPT,
 )
 from config.settings import settings
 from models.agent_file import AgentFile
@@ -23,7 +24,7 @@ logger = get_logger(__name__)
 
 CODEGEN_MODEL = "claude-sonnet-4-20250514"
 MAX_CONCURRENT_FILES = 4
-
+MAX_FIX_ITERATIONS = 1
 
 class FileManifestEntry(TypedDict):
     path: str
@@ -49,6 +50,9 @@ class CodeGenState(TypedDict):
     generated_files: List[GeneratedFile]
     messages: List[dict]
     error: Optional[str]
+    validation_issues: List[dict]
+    fix_iteration: int
+    max_fix_iterations: int
 
 
 class CodeGenService:
@@ -310,11 +314,12 @@ class CodeGenService:
 
     async def validate_node(self, state: CodeGenState) -> dict:
         session_id = state["session_id"]
+        iteration = state.get("fix_iteration", 0)
 
         if state.get("error"):
             return {}
 
-        logger.info(f"[{session_id}] Validating generated files...")
+        logger.info(f"[{session_id}] Validating generated files (iteration {iteration})...")
 
         await websocket_service.send_message(session_id, {
             "type": "codegen.status",
@@ -341,30 +346,138 @@ class CodeGenService:
             issues = result.get("issues", [])
 
             if not is_valid:
-                logger.warning(f"[{session_id}] Validation found {len(issues)} issues: {issues}")
-
-            total = len(state["generated_files"])
+                logger.warning(f"[{session_id}] Validation found {len(issues)} issues (iteration {iteration})")
 
             await websocket_service.send_message(session_id, {
-                "type": "codegen.complete",
-                "totalFiles": total,
+                "type": "codegen.validation_result",
+                "iteration": iteration,
                 "valid": is_valid,
-                "issues": issues
+                "issues": issues,
             })
 
-            logger.info(f"[{session_id}] Code generation complete: {total} files")
-            return {}
+            return {
+                "validation_issues": issues if not is_valid else [],
+            }
 
         except Exception as e:
             logger.error(f"[{session_id}] Validation failed: {e}")
-            total = len(state["generated_files"])
             await websocket_service.send_message(session_id, {
-                "type": "codegen.complete",
-                "totalFiles": total,
+                "type": "codegen.validation_result",
+                "iteration": iteration,
                 "valid": True,
-                "issues": []
+                "issues": [],
             })
-            return {}
+            return {"validation_issues": []}
+
+    async def fix_issues_node(self, state: CodeGenState) -> dict:
+        session_id = state["session_id"]
+        iteration = state.get("fix_iteration", 0)
+        issues = state.get("validation_issues", [])
+        generated_files = state["generated_files"]
+        skeleton = state["skeleton_output"]
+
+        files_by_path = {f["path"]: f for f in generated_files}
+        affected_paths: set[str] = set()
+        for issue in issues:
+            fp = issue.get("file", "")
+            if fp in files_by_path:
+                affected_paths.add(fp)
+
+        if not affected_paths:
+            logger.warning(f"[{session_id}] No fixable files found for issues, skipping fix")
+            return {"fix_iteration": iteration + 1, "validation_issues": []}
+
+        files_to_fix_list = sorted(affected_paths)
+
+        logger.info(f"[{session_id}] Fix iteration {iteration + 1}: batch-fixing {len(files_to_fix_list)} file(s)")
+
+        await websocket_service.send_message(session_id, {
+            "type": "codegen.fix_start",
+            "iteration": iteration + 1,
+            "filesToFix": files_to_fix_list,
+        })
+
+        files_to_fix_str = "\n".join(
+            f"--- FILE: {fp} ---\n{files_by_path[fp]['content']}"
+            for fp in files_to_fix_list
+        )
+
+        issues_str = "\n".join(
+            f"- [{issue.get('file', '?')}] {issue.get('line_hint', '')}: {issue['issue']}"
+            for issue in issues
+        )
+
+        other_files_str = "\n".join(
+            f"--- FILE: {f['path']} ---\n{f['content']}"
+            for f in generated_files
+            if f["path"] not in affected_paths
+        )
+
+        prompt = CODEGEN_FIX_BATCH_PROMPT.format(
+            skeleton=skeleton,
+            files_to_fix=files_to_fix_str,
+            issues=issues_str,
+            other_files=other_files_str,
+        )
+
+        try:
+            response = await self.call_llm(
+                "You are a code fix assistant. Fix all affected files in one coordinated pass. Respond only in valid JSON.",
+                prompt,
+                max_tokens=16384,
+            )
+
+            result = self.extract_json(response)
+            fixed_files = result.get("fixed_files", [])
+
+            updated_files = list(generated_files)
+            for fixed in fixed_files:
+                fp = fixed["path"]
+                content = fixed["content"]
+                lang = fixed.get("language", "python")
+
+                for i, f in enumerate(updated_files):
+                    if f["path"] == fp:
+                        updated_files[i] = GeneratedFile(path=fp, content=content, language=lang)
+                        break
+
+                await websocket_service.send_message(session_id, {
+                    "type": "codegen.fix_file_complete",
+                    "iteration": iteration + 1,
+                    "path": fp,
+                    "content": content,
+                })
+                logger.info(f"[{session_id}] Fixed {fp} ({len(content)} chars)")
+
+            return {
+                "generated_files": updated_files,
+                "fix_iteration": iteration + 1,
+            }
+
+        except Exception as e:
+            logger.error(f"[{session_id}] Batch fix failed: {e}")
+            await websocket_service.send_message(session_id, {
+                "type": "codegen.error",
+                "message": f"Fix iteration failed: {e}",
+            })
+            return {"fix_iteration": iteration + 1}
+
+    async def complete_node(self, state: CodeGenState) -> dict:
+        session_id = state["session_id"]
+        total = len(state["generated_files"])
+        issues = state.get("validation_issues", [])
+        iterations = state.get("fix_iteration", 0)
+
+        await websocket_service.send_message(session_id, {
+            "type": "codegen.complete",
+            "totalFiles": total,
+            "valid": len(issues) == 0,
+            "issues": issues,
+            "fixIterations": iterations,
+        })
+
+        logger.info(f"[{session_id}] Code generation complete: {total} files, {iterations} fix iteration(s)")
+        return {}
 
     # ---- Routing ----
 
@@ -372,6 +485,18 @@ class CodeGenService:
         if state.get("error"):
             return "end"
         return "continue"
+
+    def route_after_validation(self, state: CodeGenState) -> str:
+        issues = state.get("validation_issues", [])
+        iteration = state.get("fix_iteration", 0)
+        max_iter = state.get("max_fix_iterations", MAX_FIX_ITERATIONS)
+
+        if not issues:
+            return "complete"
+        if iteration >= max_iter:
+            logger.warning(f"[{state['session_id']}] Max fix iterations ({max_iter}) reached, completing with {len(issues)} remaining issues")
+            return "complete"
+        return "fix_issues"
 
     # ---- Graph Construction ----
 
@@ -383,6 +508,8 @@ class CodeGenService:
         graph.add_node("generate_skeletons", self.generate_skeletons_node)
         graph.add_node("generate_all_files", self.generate_all_files_node)
         graph.add_node("validate", self.validate_node)
+        graph.add_node("fix_issues", self.fix_issues_node)
+        graph.add_node("complete", self.complete_node)
 
         graph.set_entry_point("parse_plan")
         graph.add_edge("parse_plan", "generate_manifest")
@@ -405,7 +532,14 @@ class CodeGenService:
             {"continue": "validate", "end": END}
         )
 
-        graph.add_edge("validate", END)
+        graph.add_conditional_edges(
+            "validate",
+            self.route_after_validation,
+            {"fix_issues": "fix_issues", "complete": "complete"}
+        )
+
+        graph.add_edge("fix_issues", "validate")
+        graph.add_edge("complete", END)
 
         return graph.compile()
 
@@ -435,6 +569,9 @@ class CodeGenService:
             "generated_files": [],
             "messages": [],
             "error": None,
+            "validation_issues": [],
+            "fix_iteration": 0,
+            "max_fix_iterations": MAX_FIX_ITERATIONS,
         }
 
         try:

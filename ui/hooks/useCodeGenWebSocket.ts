@@ -34,6 +34,7 @@ export type CodeGenStatus =
   | "generating_skeletons"
   | "generating_file"
   | "validating"
+  | "fixing"
   | "complete"
   | "error";
 
@@ -209,20 +210,64 @@ export function useCodeGenWebSocket() {
         break;
       }
 
-      case "codegen.complete": {
-        const totalFiles = data.totalFiles as number;
+      case "codegen.validation_result": {
+        const iteration = data.iteration as number;
+        const valid = data.valid as boolean;
         const issues = data.issues as ValidationIssue[] | undefined;
-        setCodeGenStatus("complete");
-        if (issues && issues.length > 0) {
+        if (valid || !issues || issues.length === 0) {
+          addLog("success", `Validation passed${iteration > 0 ? ` (after ${iteration} fix iteration${iteration > 1 ? "s" : ""})` : ""}`);
+        } else {
           setValidationIssues(issues);
-          addLog("warning", `Validation found ${issues.length} issue(s)`);
+          addLog("warning", `Validation found ${issues.length} issue(s)${iteration > 0 ? ` (iteration ${iteration})` : ""}`);
           for (const issue of issues) {
             addLog("warning", `  ${issue.file}: ${issue.issue}`);
           }
-        } else {
-          addLog("success", "Validation passed");
         }
-        addLog("success", `Code generation complete: ${totalFiles} files`);
+        break;
+      }
+
+      case "codegen.fix_start": {
+        const iteration = data.iteration as number;
+        const filesToFix = data.filesToFix as string[];
+        setCodeGenStatus("fixing");
+        addLog("info", `Fix iteration ${iteration}: fixing ${filesToFix.length} file(s)...`);
+        break;
+      }
+
+      case "codegen.fix_file_start": {
+        const path = data.path as string;
+        const iteration = data.iteration as number;
+        addLog("info", `Fixing ${path} (iteration ${iteration})...`);
+        break;
+      }
+
+      case "codegen.fix_file_complete": {
+        const filePath = data.path as string;
+        const content = data.content as string;
+        setFiles((prev) => {
+          const existing = prev.findIndex((f) => f.path === filePath);
+          if (existing !== -1) {
+            const updated = [...prev];
+            updated[existing] = { ...updated[existing], content };
+            return updated;
+          }
+          return prev;
+        });
+        addLog("success", `${filePath} fixed (${content.length.toLocaleString()} chars)`);
+        break;
+      }
+
+      case "codegen.complete": {
+        const totalFiles = data.totalFiles as number;
+        const issues = data.issues as ValidationIssue[] | undefined;
+        const fixIterations = data.fixIterations as number | undefined;
+        setCodeGenStatus("complete");
+        if (issues && issues.length > 0) {
+          setValidationIssues(issues);
+          addLog("warning", `${issues.length} issue(s) remaining after ${fixIterations ?? 0} fix iteration(s)`);
+        }
+        const iterMsg = fixIterations ? ` (${fixIterations} fix iteration${fixIterations > 1 ? "s" : ""})` : "";
+        addLog("success", `Code generation complete: ${totalFiles} files${iterMsg}`);
         break;
       }
 

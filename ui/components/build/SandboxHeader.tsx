@@ -59,6 +59,7 @@ function CodeGenProgress({ codeGenStatus, progress }: {
     generating_manifest: "Planning file structure...",
     generating_skeletons: "Generating skeletons...",
     validating: "Validating...",
+    fixing: "Fixing issues...",
     error: "Generation failed",
   };
 
